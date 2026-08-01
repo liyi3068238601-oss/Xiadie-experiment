@@ -2,7 +2,7 @@ import { dispatchChatSseEvent } from "./chatSseProtocol";
 
 // 后端 API 客户端。dev 期指向本地 FastAPI，可被 Electron 注入的全局覆盖。
 export const API_BASE: string =
-  (window as any).__XIADIE_API__ || "http://127.0.0.1:8756";
+  (window as any).__XIADIE_API__ || "http://127.0.0.1:9756";
 
 function requestHeaders(init?: RequestInit): Headers {
   const headers = new Headers(init?.headers);

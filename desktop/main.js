@@ -10,14 +10,21 @@ const { spawn } = require("child_process");
 const http = require("http");
 const { randomBytes } = require("crypto");
 
+// 实验版必须拥有独立的 Electron 身份和用户数据根，不能因为复用遐蝶
+// 代码而落入正式版的 AppData。此设置必须发生在 ready 和单实例锁之前。
+const APP_ID = "com.xiadie.agent.experiment";
+const USER_DATA_DIR_NAME = "Xiadie-Experiment";
+app.setName("遐蝶实验版");
+app.setPath("userData", path.join(app.getPath("appData"), USER_DATA_DIR_NAME));
+
 // Electron 33 的 app.isPackaged 在从 node_modules/electron 运行时仍可能返回
 // true（已知行为变化），用 resourcesPath 是否落在 node_modules 内作为补充判断。
 const isDev =
   !app.isPackaged ||
   process.resourcesPath.includes("node_modules") ||
   process.env.XIADIE_DEV_MODE === "1";
-const BACKEND_PORT = 8756;
-const DEV_URL = "http://127.0.0.1:5173";
+const BACKEND_PORT = 9756;
+const DEV_URL = "http://127.0.0.1:6173";
 const inheritedToken = process.env.XIADIE_API_TOKEN || "";
 // 开发启动器需要先启动后端，因此会提供同一枚临时令牌；正式包始终由 Electron 生成。
 const API_TOKEN = isDev && inheritedToken.length >= 32
@@ -179,6 +186,7 @@ function startBackend() {
       ...process.env,
       XIADIE_API_TOKEN: API_TOKEN,
       XIADIE_DATA_DIR: dataDir,
+      XIADIE_PORT: String(BACKEND_PORT),
       XIADIE_PARENT_PID: String(process.pid),
       XIADIE_BGE_M3_DIR: path.join(process.resourcesPath, "models", "bge-m3"),
     },
@@ -392,7 +400,21 @@ ipcMain.on("proactive-delivery-ack", (event, payload) => {
 });
 
 // ---------------------------------------------------------------- 生命周期
+const hasSingleInstanceLock = app.requestSingleInstanceLock({ variant: "xiadie-experiment" });
+if (!hasSingleInstanceLock) app.quit();
+
+app.on("second-instance", () => {
+  if (mainWin && !mainWin.isDestroyed()) {
+    if (mainWin.isMinimized()) mainWin.restore();
+    mainWin.show();
+    mainWin.focus();
+    return;
+  }
+  if (app.isReady()) createMainWindow();
+});
+
 app.whenReady().then(() => {
+  app.setAppUserModelId(APP_ID);
   startBackend();
   createTray();
   powerMonitor.on("suspend", () => stopDeliveryBridge());

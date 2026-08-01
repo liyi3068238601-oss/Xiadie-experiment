@@ -1,6 +1,6 @@
-appId: com.xiadie.agent
-productName: 遐蝶
-copyright: © 2026 遐蝶 Agent
+appId: com.xiadie.agent.experiment
+productName: 遐蝶实验版
+copyright: © 2026 遐蝶实验版
 
 directories:
   output: ../dist-installer      # 安装器输出到仓库根 dist-installer/
@@ -41,8 +41,8 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: 遐蝶
-  artifactName: 遐蝶-Setup-${version}.${ext}
+  shortcutName: 遐蝶实验版
+  artifactName: 遐蝶实验版-Setup-${version}.${ext}
 
 # 说明：Live2D 模型为个人自用授权，禁止再分发（见 NOTICE.md）。
 # 对外发布前须替换为可再分发的模型。

@@ -9,8 +9,8 @@ from starlette.responses import JSONResponse
 TOKEN_HEADER = "X-Xiadie-Token"
 PUBLIC_PATHS = frozenset({"/api/health"})
 ALLOWED_ORIGINS = (
-    "http://127.0.0.1:5173",
-    "http://localhost:5173",
+    "http://127.0.0.1:6173",
+    "http://localhost:6173",
     "null",  # Electron production renderer loaded from file://
 )
 DEV_ORIGINS = frozenset(ALLOWED_ORIGINS[:2])

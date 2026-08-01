@@ -122,7 +122,7 @@ def test_explicit_browser_dev_mode_is_origin_limited(monkeypatch):
     monkeypatch.setenv("XIADIE_DEV_MODE", "1")
     browser = TestClient(app)
     assert browser.get(
-        "/api/providers", headers={"Origin": "http://127.0.0.1:5173"}
+        "/api/providers", headers={"Origin": "http://127.0.0.1:6173"}
     ).status_code == 200
     assert browser.get(
         "/api/providers", headers={"Origin": "https://example.com"}
@@ -138,10 +138,10 @@ def test_cors_only_allows_known_local_origins():
     }
     allowed = browser.options(
         "/api/providers",
-        headers={"Origin": "http://127.0.0.1:5173", **preflight},
+        headers={"Origin": "http://127.0.0.1:6173", **preflight},
     )
     assert allowed.status_code == 200
-    assert allowed.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
+    assert allowed.headers["access-control-allow-origin"] == "http://127.0.0.1:6173"
     denied = browser.options(
         "/api/providers", headers={"Origin": "https://example.com", **preflight}
     )

@@ -5,10 +5,12 @@ $backendPython = Join-Path $root "backend\.venv\Scripts\python.exe"
 $frontendDir = Join-Path $root "frontend"
 $desktopDir = Join-Path $root "desktop"
 $electronExe = Join-Path $desktopDir "node_modules\electron\dist\electron.exe"
+$backendPort = 9756
+$frontendPort = 6173
 $logRoot = if ($env:LOCALAPPDATA) {
-  Join-Path $env:LOCALAPPDATA "Xiadie\dev-logs"
+  Join-Path $env:LOCALAPPDATA "Xiadie-Experiment\dev-logs"
 } else {
-  Join-Path $env:TEMP "Xiadie\dev-logs"
+  Join-Path $env:TEMP "Xiadie-Experiment\dev-logs"
 }
 
 New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
@@ -18,16 +20,16 @@ function Show-LaunchError([string]$message) {
   # 写错误文件到桌面，确保用户能看到（hidden 窗口下 MessageBox 可能不显示）
   try {
     $desktop = [Environment]::GetFolderPath("Desktop")
-    $errFile = Join-Path $desktop "遐蝶启动失败.txt"
+    $errFile = Join-Path $desktop "遐蝶实验版启动失败.txt"
     $stamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $content = "遐蝶启动失败`r`n时间: $stamp`r`n错误: $message`r`n`r`n请检查是否已有遐蝶实例在运行，或查看日志：`r`n$([Environment]::GetFolderPath('LocalApplicationData'))\Xiadie\dev-logs\"
+    $content = "遐蝶实验版启动失败`r`n时间: $stamp`r`n错误: $message`r`n`r`n请检查是否已有遐蝶实验版实例在运行，或查看日志：`r`n$([Environment]::GetFolderPath('LocalApplicationData'))\Xiadie-Experiment\dev-logs\"
     [System.IO.File]::WriteAllText($errFile, $content, [System.Text.UTF8Encoding]::new($true))
   } catch {}
   try {
     Add-Type -AssemblyName PresentationFramework
     [System.Windows.MessageBox]::Show(
       $message,
-      "遐蝶启动失败",
+      "遐蝶实验版启动失败",
       [System.Windows.MessageBoxButton]::OK,
       [System.Windows.MessageBoxImage]::Error
     ) | Out-Null
@@ -89,6 +91,8 @@ try {
   $tokenPart2 = [Guid]::NewGuid().ToString("N")
   $env:XIADIE_API_TOKEN = [string]::Concat($tokenPart1, $tokenPart2)
   $env:XIADIE_PARENT_PID = [string]$PID
+  $env:XIADIE_PORT = [string]$backendPort
+  $env:XIADIE_DATA_DIR = Join-Path $root "backend\data"
   # dev 模式标记：security.py 对 vite origin 放行无 token 请求，
   # main.js 也以此作为 isDev 的可靠补充判断。
   $env:XIADIE_DEV_MODE = "1"
@@ -100,8 +104,8 @@ try {
     exit 0
   }
 
-  if (Test-Port 8756) {
-    throw "Backend port 8756 is already in use. Exit the existing backend and try again."
+  if (Test-Port $backendPort) {
+    throw "Experiment backend port $backendPort is already in use. Exit the existing experiment backend and try again."
   } else {
     # dev 模式文件标志：venv launcher 派生子进程时可能丢失 XIADIE_DEV_MODE
     # 环境变量，文件标志不受进程派生影响，security.py 优先检查它。
@@ -122,7 +126,7 @@ try {
     $npm = (Get-Command npm.cmd -ErrorAction Stop).Source
     $startedFrontend = Start-Process `
       -FilePath $npm `
-      -ArgumentList "run", "dev" `
+      -ArgumentList "run", "dev", "--", "--port", ([string]$frontendPort), "--strictPort" `
       -WorkingDirectory $frontendDir `
       -RedirectStandardOutput (Join-Path $logRoot "frontend.out.log") `
       -RedirectStandardError (Join-Path $logRoot "frontend.err.log") `
@@ -135,13 +139,13 @@ try {
   for ($i = 0; $i -lt 40; $i++) {
     if (-not $backendReady) {
       try {
-        $health = Invoke-RestMethod "http://127.0.0.1:8756/api/health" -TimeoutSec 1
+        $health = Invoke-RestMethod "http://127.0.0.1:$backendPort/api/health" -TimeoutSec 1
         $backendReady = $health.status -eq "ok"
       } catch {}
     }
     if (-not $frontendReady) {
       try {
-        $page = Invoke-WebRequest "http://127.0.0.1:5173/" -UseBasicParsing -TimeoutSec 1
+        $page = Invoke-WebRequest "http://127.0.0.1:$frontendPort/" -UseBasicParsing -TimeoutSec 1
         $frontendReady = $page.StatusCode -eq 200
       } catch {}
     }
@@ -155,8 +159,8 @@ try {
 
   # npm.cmd 和虚拟环境 Python 都可能再派生真正监听端口的子进程。
   # 单独保留监听进程对象，退出时与外层启动进程一起清理。
-  $backendListener = Get-ListenerProcess 8756
-  $frontendListener = Get-ListenerProcess 5173
+  $backendListener = Get-ListenerProcess $backendPort
+  $frontendListener = Get-ListenerProcess $frontendPort
 
   $desktop = Start-Process `
     -FilePath $electronExe `
@@ -185,7 +189,7 @@ try {
   # 兜底：按端口和进程名清理所有残留进程。
   # venv launcher 派生的 codex-runtimes python 子进程可能成为孤儿，
   # 之前的进程对象杀不到它；直接按端口定位并杀掉监听者更可靠。
-  foreach ($port in 8756, 5173) {
+  foreach ($port in $backendPort, $frontendPort) {
     try {
       $listener = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction Stop |
         Select-Object -First 1

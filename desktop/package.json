@@ -1,8 +1,8 @@
 {
-  "name": "xiadie-desktop",
+  "name": "xiadie-experiment-desktop",
   "private": true,
   "version": "0.1.0",
-  "description": "遐蝶 - Windows 桌面 AI 伴侣 Agent",
+  "description": "遐蝶实验版 - 助手优先 Windows 桌面 Agent",
   "author": "遐蝶 Agent",
   "main": "main.js",
   "scripts": {

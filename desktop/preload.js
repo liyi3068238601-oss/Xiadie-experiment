@@ -44,4 +44,4 @@ contextBridge.exposeInMainWorld("xiadie", {
 });
 
 // 后端地址注入，供前端 api.ts 读取
-contextBridge.exposeInMainWorld("__XIADIE_API__", "http://127.0.0.1:8756");
+contextBridge.exposeInMainWorld("__XIADIE_API__", "http://127.0.0.1:9756");
