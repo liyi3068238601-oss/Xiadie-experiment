@@ -2,7 +2,8 @@
 
 - 日期：2026-08-01
 - 状态：实验基线
-- 分支：`experiment/cyrene-style-agent`
+- 仓库：`https://github.com/liyi3068238601-oss/Xiadie-experiment`
+- 默认分支：`main`
 - 分叉点：`a93df0e`
 - 对照目录：`E:\Xiadie\Xiadie1.0`
 - 实验目录：`E:\Xiadie\Xiadie-experiment`
@@ -18,7 +19,7 @@ Cyrene-Agent 只作为 Chat/Work 分层、Agent 与底层模型分离、任务�
 ## 2. 与 LIFE 主线的边界
 
 - `Xiadie1.0` 继续实施 LIFE2.7～LIFE2.11，验证有连续关系、情绪和生活状态的陪伴路线。
-- 本分支不反向修改 LIFE 主线的发布结论，不直接合并主线后续 LIFE Active 提交。
+- 本仓库不反向修改 LIFE 主线的发布结论，不直接合并主线后续 LIFE Active 提交。
 - 两边可选择性共享安全修复、Provider、KIG、CTX、工具、UI 基础设施和通用测试修复；涉及 Persona、Memory 装配和主动行为的提交必须人工挑选。
 - 第一轮只关闭或改造运行时消费，不删除数据库表、不新增破坏性迁移、不清除已经复制的用户数据。
 
@@ -91,7 +92,7 @@ Cyrene-Agent 只作为 Chat/Work 分层、Agent 与底层模型分离、任务�
 
 ## 6. 分支与数据纪律
 
-- 实验分支只在 `E:\Xiadie\Xiadie-experiment` 提交；LIFE 主线只在 `E:\Xiadie\Xiadie1.0` 提交。
+- 实验仓库只在 `E:\Xiadie\Xiadie-experiment` 提交；LIFE 主仓库只在 `E:\Xiadie\Xiadie1.0` 提交。两者具有独立 `.git` 和 `origin`。
 - 开始命令前先检查 `git branch --show-current` 和 `git status --short`。
 - 两套后端不能同时绑定 8756；需要并行运行时，实验版必须显式配置其他端口和独立前端 API 地址。
 - Provider/API 配置已随数据库副本复制；后续任一目录的配置修改不会自动同步。
@@ -99,7 +100,7 @@ Cyrene-Agent 只作为 Chat/Work 分层、Agent 与底层模型分离、任务�
 
 ## 7. 当前准备完成门
 
-- [x] 实验 worktree 和独立分支已经建立。
+- [x] 独立 GitHub 仓库、本地 `.git` 和 `main` 已经建立，完整祖先历史已保留。
 - [x] 后端虚拟环境、数据库和构建资源已经复制。
 - [x] 前端依赖已依据锁文件干净重建，public 与 dist 已复制。
 - [x] Electron 依赖、模型资源、构建与安装产物已经复制。
