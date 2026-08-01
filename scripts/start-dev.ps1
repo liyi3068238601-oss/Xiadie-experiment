@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $backendPython = Join-Path $root "backend\.venv\Scripts\python.exe"
@@ -97,13 +97,6 @@ try {
   # main.js 也以此作为 isDev 的可靠补充判断。
   $env:XIADIE_DEV_MODE = "1"
 
-  $existingElectron = Get-CimInstance Win32_Process -Filter "Name = 'electron.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.ExecutablePath -eq $electronExe } |
-    Select-Object -First 1
-  if ($existingElectron) {
-    exit 0
-  }
-
   if (Test-Port $backendPort) {
     throw "Experiment backend port $backendPort is already in use. Exit the existing experiment backend and try again."
   } else {
@@ -122,7 +115,7 @@ try {
       -PassThru
   }
 
-  if (-not (Test-Port 5173)) {
+  if (-not (Test-Port $frontendPort)) {
     $npm = (Get-Command npm.cmd -ErrorAction Stop).Source
     $startedFrontend = Start-Process `
       -FilePath $npm `

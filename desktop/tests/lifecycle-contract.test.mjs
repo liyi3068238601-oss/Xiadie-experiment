@@ -6,6 +6,7 @@ const main = readFileSync(new URL("../main.js", import.meta.url), "utf8");
 const preload = readFileSync(new URL("../preload.js", import.meta.url), "utf8");
 const builder = readFileSync(new URL("../electron-builder.yml", import.meta.url), "utf8");
 const launcher = readFileSync(new URL("../../scripts/start-dev.ps1", import.meta.url), "utf8");
+const batchLauncher = readFileSync(new URL("../../启动遐蝶.bat", import.meta.url), "utf8");
 const security = readFileSync(new URL("../../backend/app/security.py", import.meta.url), "utf8");
 
 test("tray owns background lifetime while windows may close", () => {
@@ -30,6 +31,7 @@ test("quit stops polling and terminates the owned backend", () => {
 });
 
 test("experiment identity, storage and ports are isolated from the LIFE product", () => {
+  assert.equal(launcher.charCodeAt(0), 0xfeff, "Windows PowerShell requires the UTF-8 BOM");
   assert.match(main, /APP_ID = "com\.xiadie\.agent\.experiment"/);
   assert.match(main, /USER_DATA_DIR_NAME = "Xiadie-Experiment"/);
   assert.match(main, /app\.setPath\("userData"/);
@@ -42,8 +44,13 @@ test("experiment identity, storage and ports are isolated from the LIFE product"
   assert.match(builder, /productName: 遐蝶实验版/);
   assert.match(launcher, /\$backendPort = 9756/);
   assert.match(launcher, /\$frontendPort = 6173/);
+  assert.match(launcher, /Test-Port \$frontendPort/);
   assert.match(launcher, /Xiadie-Experiment\\dev-logs/);
   assert.match(launcher, /XIADIE_DATA_DIR = Join-Path \$root "backend\\data"/);
+  assert.match(batchLauncher, /WindowsPowerShell\\v1\.0\\powershell\.exe/);
+  assert.match(batchLauncher, /Xiadie-Experiment\\dev-logs/);
+  assert.match(batchLauncher, /scripts\\start-dev\.ps1/);
+  assert.doesNotMatch(batchLauncher, /wscript/i);
   assert.match(security, /http:\/\/127\.0\.0\.1:6173/);
   assert.doesNotMatch(security, /http:\/\/127\.0\.0\.1:5173/);
 });
