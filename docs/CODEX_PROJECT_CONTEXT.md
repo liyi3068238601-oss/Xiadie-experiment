@@ -148,6 +148,8 @@
 | 模型协议 | OpenAI-compatible 基础适配 | 多供应商统一聊天和后续工具调用。 |
 | 表现层 | PresentationIntent + PresentationAdapter | 隔离 Agent Core 与 React/Live2D；Live2D 仅为过渡 adapter。 |
 
+CYR.1 产品口径只有一个 Agent：Persona 决定遐蝶的身份、价值判断和表达，WorldBook 是按需召回的遐蝶特殊知识库，Memory 是真实用户互动，底层模型、CTX、Knowledge、Task 和 Tool 共同提供普通 Agent 能力。`companionship/focused_work` 不再作为用户模式或业务状态；Persona v2.3 在同一 Prompt 内根据本轮请求自然调整表达。
+
 不得为了统一语言而把 Python 后端整体改写为 TypeScript，也不得为了采用新框架而推倒现有前端或 Electron 壳。
 
 ---

@@ -1639,7 +1639,6 @@ export interface ChatRequestOptions {
   image_provider_id?: string;
   image_model?: string;
   image_location_revision?: number;
-  persona_mode?: "companionship" | "focused_work";
   persona_style?: {
     address_style: "natural" | "ge_xia_low" | "name_if_known" | "none";
     detail_level: "concise" | "balanced" | "detailed";

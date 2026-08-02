@@ -29,7 +29,7 @@ Xiadie 实验版保留“遐蝶”的稳定身份、人格、表达方式和角�
 
 ### 2.1 保留
 
-- Persona Core、Chat/Work 模式、WorldBook/Lore 和输出真实性边界。
+- Persona Core、单 Agent 自适应行为、WorldBook/Lore 和输出真实性边界。
 - 原始对话、CTX 滚动摘要与跨会话历史回忆。
 - MEM Fragment、Entity、Episode、Saga、Archivist、纠错与来源追踪。
 - ShortMemo，但归属改为近期任务与上下文，不再归 LIFE。
@@ -105,7 +105,7 @@ Xiadie 实验版保留“遐蝶”的稳定身份、人格、表达方式和角�
 
 ### Persona / WorldBook / ShortMemo
 
-Persona、WorldBook 和 Chat/Work 模式保留。ShortMemo 迁出 LIFE，限定为用户安排、待办、明确承诺、当前项目状态和近期上下文。删除 InnerStateProjection。
+Persona 与 WorldBook 保留；原 Chat/Work 的有效规则收敛进单 Agent 自适应行为，不再保留用户模式。ShortMemo 迁出 LIFE，限定为用户安排、待办、明确承诺、当前项目状态和近期上下文。删除 InnerStateProjection。
 
 ## 5. 数据迁移原则
 
@@ -148,7 +148,7 @@ Persona、WorldBook 和 Chat/Work 模式保留。ShortMemo 迁出 LIFE，限定�
 - 建立 Task、ToolRegistry、PermissionGuard、Artifact 和 Recovery。
 - 接入受控文件操作、Web/Research、代码执行与 MCP。
 - 将主动系统改为任务、提醒和工具结果驱动。
-- 完成 Chat/Work 对照评测和回归。
+- 完成单 Agent 多场景行为评测和回归。
 
 ## 7. 验收硬门
 

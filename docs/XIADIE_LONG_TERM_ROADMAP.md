@@ -616,7 +616,7 @@ Artifact
 
 本节原为 LIFE v2 候选登记，已被 2026-08-01 助手优先路线取代：
 
-- Persona 编译器、模型认证、Chat/Work 模式和 WorldBook 保留，归 Persona/Lore。
+- Persona 编译器、模型质量认证、单 Agent 自适应行为和 WorldBook 保留，归 Persona/Lore。
 - `short-memo-v1` 保留限长、来源、TTL、敏感信息硬门和用户控制，归 Task/CTX/MEM。
 - `inner-state-projection-v1`、Goal/LIFE Event 表达投影和 LIFE v2 名义全部退役。
 - 详细迁移见 `ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md`。

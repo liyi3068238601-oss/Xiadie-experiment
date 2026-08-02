@@ -3,7 +3,7 @@
 - 版本：v2.1
 - 日期：2026-08-02
 - 状态：助手优先所有权已冻结；LIFE 已物理退役；LOG.0 已冻结
-- 适用顺序：`LOG → Chat/Work → Task → ToolRegistry → PluginHost → Web/Research`
+- 适用顺序：`LOG → Single-Agent Persona → Task → ToolRegistry → PluginHost → Web/Research`
 - 解释优先级：冻结协议与 ADR > 本矩阵 > 专项计划 > 阶段施工记录
 
 > v2.0 路线变更：LIFE 不再是现行所有者或 adapter 参与者。第 1 节中早期 ConstructionBaseline、Schema 64～71 和历史冻结记录继续作为审计证据，但不能据此新增 LIFE 依赖。冲突时以 `ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md` 为准。
@@ -12,7 +12,7 @@
 
 | 对象/能力 | 唯一所有者与最终写入者 | 可读/可提议者 | 删除语义 |
 |---|---|---|---|
-| Persona Core / Chat/Work | Persona | CTX 只读编译结果 | 资源版本化；不能被用户资料覆盖 |
+| Persona Core / Adaptive Behavior | Persona | CTX 只读编译结果 | 资源版本化；不能被用户资料覆盖 |
 | Conversation Presence | EAP | CDS/CIE 只读或提议 | EAP 管理 |
 | 当轮用户状态 / 表达指导 | EAP/Persona 请求编排 | CDS 提议 | 请求结束即失效，不跨轮持久化 |
 | Relationship 边界 | EAP Reducer | MEM/CDS 提议 | 用户可纠正/清除；不影响权限 |
@@ -215,9 +215,9 @@ LIFE.1 已在同一 Registry 注册以下 Shadow 白名单，统一使用 `life-
 
 “自然度 ≥ 90%”统一定义为 `acceptable / 有效样本`。acceptable 可有轻微瑕疵但不影响使用；机械重复、事实错位、越界、明显打扰或角色失真均为 unacceptable。主观评测隐藏新旧来源，至少两轮独立评审，分歧样本仲裁。
 
-## 6. 模型认证等级
+## 6. 结构化决策的模型认证等级
 
-认证按 `model binding + decision_kind + protocol version` 保存，用户切换模型后不得继承旧模型资格。
+本节只约束会产生结构化判断、持久化或 Active 写入的 CDS DecisionKind，不是 Persona 运行许可证。认证按 `model binding + decision_kind + protocol version` 保存，用户切换模型后不得继承旧模型的 Active 决策资格。
 
 | 等级 | 允许范围 |
 |---|---|
@@ -227,6 +227,8 @@ LIFE.1 已在同一 Registry 注册以下 Shadow 白名单，统一使用 `life-
 | `local_sensitive_verified` | 额外允许处理已授权日记、私密知识和生活数据 |
 
 自定义 OpenAI-compatible 模型首次用于认知任务时必须执行最小结构化探测；失败时保持旧算法。认证不替代传输授权。
+
+Persona 采用独立规则：资源完整即可向任何接口兼容、上下文能力足够的模型加载；模型固定集结果只记录为 `verified/unverified` 质量状态。未验证不触发 Persona 回退，Persona 版本不决定 temperature 等采样参数。视觉、工具调用、JSON 结构化输出和上下文窗口分别由能力探测约束。
 
 ## 7. CognitionBudgetGovernor
 
@@ -272,6 +274,6 @@ export_manifest.json
 - 使用尚未合并或未锁定 SHA 的前置分支开工：阻断。
 - 未经协议升级直接修改冻结 Schema/枚举/语义：阻断。
 - 在临时聊天产生长期派生事实：阻断。
-- 未认证模型进入 Active：阻断。
+- 未认证模型进入会产生结构化决策写入的 Active DecisionKind：阻断；普通 Persona 聊天不适用此门。
 - 无有效来源、非候选 ID、来源 revision 失效仍应用：阻断。
 - 没有回退与单开关回滚路径：阻断。

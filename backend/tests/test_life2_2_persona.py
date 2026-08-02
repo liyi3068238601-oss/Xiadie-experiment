@@ -50,7 +50,7 @@ def test_unknown_mode_and_style_are_rejected_at_request_boundary() -> None:
         )
 
 
-def test_shadow_and_uncertified_active_keep_legacy_prompt() -> None:
+def test_legacy_rollout_and_mode_inputs_do_not_disable_single_agent_v23() -> None:
     shadow = persona_v2.compile_for_request(
         legacy_prompt=persona.PERSONA_PROMPT, mode="companionship", style=None,
         provider=_provider(), model="deepseek-v4-flash", rollout_mode="shadow",
@@ -59,13 +59,16 @@ def test_shadow_and_uncertified_active_keep_legacy_prompt() -> None:
         legacy_prompt=persona.PERSONA_PROMPT, mode="focused_work", style=None,
         provider=_provider(), model="deepseek-v4-flash", rollout_mode="active",
     )
-    assert shadow.prompt == persona.PERSONA_PROMPT
-    assert shadow.candidate_prompt and not shadow.selected_v2
-    assert active.prompt == persona.PERSONA_PROMPT
-    assert active.fallback_reason == "persona_model_uncertified"
+    assert shadow.prompt == active.prompt
+    assert shadow.selected_profile == "v2.3"
+    assert active.selected_profile == "v2.3"
+    assert shadow.mode == active.mode == "adaptive"
+    assert shadow.selected_v2 and active.selected_v2
+    assert not shadow.certified and not active.certified
+    assert "不存在需要宣布或切换的“聊天模式”“工作模式”" in shadow.prompt
 
 
-def test_certificate_is_bound_to_model_mode_and_compiled_hash(tmp_path, monkeypatch) -> None:
+def test_frozen_v22_certificate_is_still_bound_to_model_mode_and_hash(tmp_path, monkeypatch) -> None:
     candidate, manifest, _ = persona_v2.compile_candidate(mode="focused_work")
     compiled_hash = hashlib.sha256(candidate.encode()).hexdigest()
     fingerprint = persona_v2.model_fingerprint(_provider(), "deepseek-v4-flash")
@@ -84,16 +87,14 @@ def test_certificate_is_bound_to_model_mode_and_compiled_hash(tmp_path, monkeypa
     }), encoding="utf-8")
     monkeypatch.setattr(persona_v2, "CERTIFICATIONS_PATH", certification)
 
-    result = persona_v2.compile_for_request(
-        legacy_prompt=persona.PERSONA_PROMPT, mode="focused_work", style=None,
-        provider=_provider(), model="deepseek-v4-flash", rollout_mode="active",
+    assert persona_v2.is_certified(
+        fingerprint, manifest["profile_version"], manifest["compiler_version"],
+        "focused_work", compiled_hash,
     )
-    other_mode = persona_v2.compile_for_request(
-        legacy_prompt=persona.PERSONA_PROMPT, mode="companionship", style=None,
-        provider=_provider(), model="deepseek-v4-flash", rollout_mode="active",
+    assert not persona_v2.is_certified(
+        fingerprint, manifest["profile_version"], manifest["compiler_version"],
+        "companionship", compiled_hash,
     )
-    assert result.selected_v2 and result.prompt == candidate
-    assert not other_mode.selected_v2
 
 
 def test_checked_in_v22_certificate_matches_guarded_evidence() -> None:
@@ -114,10 +115,11 @@ def test_checked_in_v22_certificate_matches_guarded_evidence() -> None:
     assert all(run["summary"]["hard_pass_count"] == 150 for run in evidence["runs"])
 
 
-def test_resource_corruption_falls_back_without_exposing_prompt(tmp_path, monkeypatch) -> None:
-    broken = tmp_path / "v2"
+def test_all_profile_corruption_falls_back_without_exposing_prompt(tmp_path, monkeypatch) -> None:
+    broken = tmp_path / "profiles"
     broken.mkdir()
     (broken / "manifest.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(persona_v2, "V2_3_DIR", broken)
     monkeypatch.setattr(persona_v2, "PROFILE_DIR", broken)
     monkeypatch.setattr(persona_v2, "MANIFEST_PATH", broken / "manifest.json")
 
@@ -127,5 +129,5 @@ def test_resource_corruption_falls_back_without_exposing_prompt(tmp_path, monkey
     )
     meta = result.public_meta()
     assert result.prompt == persona.PERSONA_PROMPT
-    assert result.fallback_reason == "persona_resource_invalid"
+    assert result.fallback_reason == "persona_all_profiles_invalid"
     assert "prompt" not in json.dumps(meta).casefold()

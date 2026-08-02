@@ -57,7 +57,6 @@ type BufferedIngressEntry = api.TurnIngressMessage & {
   attachments: api.ChatAttachmentResult[];
 };
 
-type PersonaMode = "companionship" | "focused_work";
 type PersonaStyle = NonNullable<api.ChatRequestOptions["persona_style"]>;
 const DEFAULT_PERSONA_STYLE: PersonaStyle = {
   address_style: "natural",
@@ -83,7 +82,6 @@ export function ChatView({ sessionId, focusMessageId, onMode, companionCluster, 
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [cieEnabled, setCieEnabled] = useState(false);
   const [ingressCount, setIngressCount] = useState(0);
-  const [personaMode, setPersonaMode] = useState<PersonaMode>("companionship");
   const [personaStyle, setPersonaStyle] = useState<PersonaStyle>(DEFAULT_PERSONA_STYLE);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -137,13 +135,12 @@ export function ChatView({ sessionId, focusMessageId, onMode, companionCluster, 
 
   useEffect(() => {
     if (!sessionId) return;
-    const key = `xiadie-persona-v1:${sessionId}`;
     try {
-      const saved = JSON.parse(window.sessionStorage.getItem(key) || "null");
-      setPersonaMode(saved?.mode === "focused_work" ? "focused_work" : "companionship");
+      const current = window.sessionStorage.getItem(`xiadie-persona-v2:${sessionId}`);
+      const legacy = window.sessionStorage.getItem(`xiadie-persona-v1:${sessionId}`);
+      const saved = JSON.parse(current || legacy || "null");
       setPersonaStyle({ ...DEFAULT_PERSONA_STYLE, ...(saved?.style || {}) });
     } catch {
-      setPersonaMode("companionship");
       setPersonaStyle(DEFAULT_PERSONA_STYLE);
     }
   }, [sessionId]);
@@ -152,13 +149,13 @@ export function ChatView({ sessionId, focusMessageId, onMode, companionCluster, 
     if (!sessionId) return;
     try {
       window.sessionStorage.setItem(
-        `xiadie-persona-v1:${sessionId}`,
-        JSON.stringify({ mode: personaMode, style: personaStyle }),
+        `xiadie-persona-v2:${sessionId}`,
+        JSON.stringify({ style: personaStyle }),
       );
     } catch {
       /* sessionStorage 不可用时只影响偏好持久化，不阻断聊天 */
     }
-  }, [sessionId, personaMode, personaStyle]);
+  }, [sessionId, personaStyle]);
 
   useEffect(() => {
     const previousSession = activeSessionRef.current;
@@ -559,7 +556,6 @@ export function ChatView({ sessionId, focusMessageId, onMode, companionCluster, 
         },
       },
       {
-        persona_mode: personaMode,
         persona_style: personaStyle,
         regenerate,
         request_nonce: requestNonce,

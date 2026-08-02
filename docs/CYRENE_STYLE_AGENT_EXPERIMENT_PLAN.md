@@ -14,7 +14,7 @@
 
 本实验不要求遐蝶主动承认自己是 AI、语言模型或通用助手。产品架构可以按助手系统设计，角色自述仍从遐蝶第一人称出发，并遵守事实诚实边界。
 
-Cyrene-Agent 只作为 Chat/Work 分层、Agent 与底层模型分离、任务能力完整性及人格连续性的参考。不得复制其角色内容、世界观、台词或项目专有实现。
+Cyrene-Agent 只作为聊天行为质量、Agent 与底层模型分离、任务能力完整性及人格连续性的参考。不得复制其角色内容、世界观、台词或项目专有实现。
 
 ## 2. 与 LIFE 主线及历史实现的边界
 
@@ -100,10 +100,11 @@ Cyrene-Agent 只作为 Chat/Work 分层、Agent 与底层模型分离、任务�
 - 主动行为仅由用户任务、明确承诺、近期安排或当前会话机会触发。
 - 所有自动动作继续保留频率限制、静默时段、授权和可取消边界。
 
-### EXP3：Chat / Work 与 Agent 能力
+### EXP3：单 Agent 自适应交流与任务能力
 
-- Chat 保持自然陪伴和适度主动；Work 结论优先、可验证、能持续执行任务。
-- 两种模式共享 Persona Core、用户记忆、工具真实性和安全边界。
+- 用户始终面对同一个遐蝶，不提供 Chat/Work 模式开关或第二人格状态。
+- 同一 Persona 根据当前请求自然决定闲聊、倾听、回答或任务推进；任务场景结论优先、可验证，闲聊场景自然克制。
+- Persona 只负责身份、判断与语气；WorldBook 只是遐蝶特殊知识库，Memory 只保存真实互动，工具与权限保持独立权威状态。
 - 强化工具选择、失败恢复、任务状态和结果回传，不制造第二套 Agent 调度系统。
 
 ### EXP4：对照评测与产品决策
@@ -115,7 +116,7 @@ Cyrene-Agent 只作为 Chat/Work 分层、Agent 与底层模型分离、任务�
 
 ## 6. 长期路线入口
 
-长期 Observability、Chat/Work、TaskRun、ToolRegistry、PluginHost、Web/Research、文件与办公工具、MCP、受控主动 Agent、Worker 和 Live2D 退场路线统一见：
+长期 Observability、单 Agent 自适应行为、TaskRun、ToolRegistry、PluginHost、Web/Research、文件与办公工具、MCP、受控主动 Agent、Worker 和 Live2D 退场路线统一见：
 
 `docs/CYRENE_STYLE_AGENT_LONG_TERM_ROADMAP.md`
 

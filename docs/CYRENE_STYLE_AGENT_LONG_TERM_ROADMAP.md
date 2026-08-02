@@ -11,7 +11,7 @@
 
 - 同一个稳定角色同时承担自然聊天与正式工作。
 - 角色人格、Agent Core 和底层模型相互分离。
-- Chat 与 Work 调整表达密度和执行方式，不切换成另一个角色。
+- 同一 Persona 根据请求自然调整表达密度和执行方式，不暴露产品模式，也不切换成另一个角色。
 - Agent 能够理解目标、形成计划、调用工具、持续执行、恢复失败并交付结果。
 - 记忆服务于用户、任务和真实共同经历，不制造角色离线人生。
 - 主动帮助来自任务机会和明确承诺，不来自模拟情绪或虚构生活。
@@ -78,7 +78,7 @@ Chat 和 Work 共享 Persona Core、记忆、事实、安全和权限。区别�
 
 - PresentationAdapter、主窗口、托盘和快捷入口；Live2D 只作为实验期过渡 adapter。
 - CIE 消息积累、取消、图片和回复展示。
-- Chat/Work 模式与任务状态卡。
+- 单 Agent 自适应表达与任务状态卡。
 
 ### 4.2 Agent Core
 
@@ -148,17 +148,20 @@ LOG.1～LOG.5 已可供实验版日常诊断使用。Windows 打包态只读目�
 
 权威施工规范见 `docs/OBSERVABILITY_AND_DIAGNOSTIC_LOGGING_PLAN.md`。
 
-### CYR.1：Chat / Work 产品闭环
+### CYR.1：单 Agent Persona v2.3
 
-目标：同一人格在聊天和工作任务中都有稳定、可评测的表现。
+目标：用户始终面对同一个遐蝶 Agent；无需选择 Chat/Work，Agent 根据当前请求自然调整闲聊、倾听、回答或任务推进方式。
 
-- 固化 Chat/Work 模式合同。
-- Work 回复结论优先，角色感不遮挡任务信息。
-- 增加模式请求快照、回放和诊断。
-- 建立自然聊天、技术问答、写作、分析和多轮任务固定集。
-- 对每个 Provider/模型单独认证 Persona 与模式兼容性。
+- [x] 冻结单 Agent、Persona、WorldBook、Memory 与能力边界。
+- [x] 建立版本化 Persona v2.3，并保留 v2.2 与 legacy 回退。
+- [x] 合并 companionship/focused_work 的有效行为规则为单一 adaptive policy。
+- [x] 移除前端不可见的 `persona_mode` 状态与每轮传输。
+- [ ] 建立自然聊天、倾诉、技术问答、写作、分析和任务固定集。
+- [ ] 确认 WorldBook 关闭或缺失不影响现代知识与普通任务能力。
 
-退出门：身份、事实、安全、任务正确性和自然度达到固定门槛；模式切换不造成第二人格。
+退出门：一个 Persona 在不同请求中保持身份、事实、安全、任务正确性和自然度；不出现模式切换提示、第二人格或世界观知识白名单。
+
+权威施工计划见 `docs/CYR1_SINGLE_AGENT_PERSONA_V23_PLAN.md`。
 
 ### CYR.2：TaskRun 执行工作台
 
@@ -305,7 +308,7 @@ LOG.1～LOG.5 已可供实验版日常诊断使用。Windows 打包态只读目�
 
 - 安装、升级、迁移、备份、恢复和卸载。
 - 性能、成本、崩溃和长期运行监控。
-- 模型与工具兼容认证。
+- 模型兼容性评测、质量验证记录与工具能力探测。
 - 用户数据导出和隐私删除。
 - 插件/连接器签名、权限清单和版本治理。
 - 发布资源和角色资产许可证审计。
@@ -317,7 +320,7 @@ LOG.1～LOG.5 已可供实验版日常诊断使用。Windows 打包态只读目�
 RETIRE.0～RETIRE.3 已完成
   → LOG.0 已完成
   → LOG.1～LOG.5 Observability/Diagnostic
-  → CYR.1 Chat/Work
+  → CYR.1 单 Agent Persona
   → CYR.2 TaskRun
   → CYR.3 ToolRegistry/Permission/Artifact
   → PLUG.0～PLUG.4 PluginHost/Feeling candidate
@@ -354,9 +357,11 @@ PluginHost 可在 CYR.3 后建立最小宿主，但高风险第三方插件必�
 ### 对照方法
 
 - 固定同一 Provider、模型、temperature、输入、工具和权限。
-- Chat 与 Work 分开评测。
+- 按闲聊、倾诉、问答、任务、技术讨论和高风险场景分别评测，但不建立产品模式。
 - 纯合成固定集用于回归，真实模型用于发布认证。
 - 结果按模型指纹绑定，不向其他模型自动继承。
+
+Persona 的模型记录只表示质量验证状态，不是运行许可证。未验证模型仍使用当前 Persona 正常聊天；采样参数由独立的模型/Provider 配置和能力策略决定，不能从 Persona 版本或验证状态隐式推导。结构化决策写入、工具调用等高风险能力可按各自协议设置更严格的能力与质量门，但不得反向阻止 Persona 加载。
 
 ## 8. 明确不做
 
@@ -366,3 +371,98 @@ PluginHost 可在 CYR.3 后建立最小宿主，但高风险第三方插件必�
 - 不在 ToolRegistry 和权限底座前接入任意桌面自动化。
 - 不把多模型路由称为多 Agent。
 - 不复制参考产品的角色内容或专有实现。
+
+## 9. 长期基线末尾：临时兼容与退场台账
+
+本节记录为了迁移安全而暂时保留、但不应永久进入目标架构的组件。每完成一个阶段，都应重新检查本台账；兼容层只能按明确门槛退场，不能因为“目前还能用”而无限期保留。
+
+### 9.1 Persona v2.2 迁移安全垫
+
+CYR.1 期间的运行结构是：
+
+```text
+Persona v2.3
+  │ 资源异常
+  ▼
+Persona v2.2 immutable fallback
+  │ 同样异常
+  ▼
+代码内置 legacy Persona
+```
+
+这只是迁移期结构，不是长期目标。成熟后的目标结构是：
+
+```text
+验证并发布的 Persona v2.3 只读资源包
+  │ 资源异常
+  ▼
+代码内置 emergency Persona
+```
+
+删除 v2.2 运行时前必须同时满足：
+
+- v2.3 已经过一段真实使用，并通过多模型、多场景固定集验证。
+- 资源 hash、manifest、token 门和启动自检持续稳定。
+- 已验证任一正式资源损坏时可以直接回退 emergency Persona。
+- emergency Persona 足以保持遐蝶身份、事实诚实和基本安全边界。
+- 诊断日志能显示损坏文件的安全标识、失败类型、失败原因和最终回退状态，不输出资源正文。
+- 当前运行时、发布脚本和质量流程已不再读取 v2.2 历史模型认证数据。
+- 旧客户端、测试、维护脚本和外部诊断消费者均不再依赖 v2.2 路径、编译接口或元数据。
+
+达到门槛后删除：
+
+- `backend/app/persona_profiles/v2_2/`。
+- v2.2 编译、认证与回退分支。
+- `companionship/focused_work` 资源、模式常量和对应历史运行测试。
+- v2.3 → v2.2 → legacy 的三级分支，改为 v2.3 → emergency 两级分支。
+
+删除运行时代码前，将 v2.2 的 manifest、hash、认证报告、设计说明和最终退场记录集中归档到 `docs/archive/`；源码仍可由 Git 历史恢复，不复制一套隐藏运行实现。
+
+### 9.2 Persona 其他过渡兼容
+
+以下项目与 v2.2 同批审计，但可按各自依赖独立删除：
+
+| 临时项 | 当前用途 | 删除条件 |
+|---|---|---|
+| 后端请求字段 `persona_mode` | 接受旧客户端请求，运行时忽略 | 已发布客户端均停止发送，兼容窗口结束 |
+| `LEGACY_MODES` / `MODES` 与 `compile_candidate` | v2.2 历史测试和脚本兼容 | v2.2 证据归档且脚本迁移完成 |
+| `persona_mode`、`persona_rollout_mode`、`persona_v2_selected` 诊断别名 | 旧诊断读取器兼容 | 支持包、UI 和外部读取器只消费 profile/policy 字段 |
+| `xiadie-persona-v1:*` sessionStorage 读取 | 一次性迁移旧表达偏好 | 至少一个稳定发布周期后，且迁移统计表明无有效旧会话依赖 |
+| v2.2 模型质量记录读取 | 迁移期验证安全垫 | 当前 Persona 质量验证完全切换至 v2.3 发布资源与固定集；记录不参与运行选择 |
+
+正式 Persona 资源最终应在构建或发布阶段完成校验并编译为只读资源包；运行时仍执行包完整性和 token 上限检查。代码内置 emergency Persona 必须极短、无可变外部依赖，并有独立故障注入测试。
+
+### 9.3 其他已知过渡物
+
+- Live2D / Electron PresentationAdapter：仅作为实验入口；替代入口通过功能、可访问性、启动器和迁移验收后，删除 renderer、IPC、设置和受限资产链。
+- LOG 旧字段与兼容事件：只有在诊断 UI、支持包和启动器全部完成协议迁移后才能删除；删除前保留协议版本映射和兼容窗口。
+- LIFE 退役兼容与旧 Schema 迁移器：新数据库不再创建 LIFE 表；当支持的最老升级版本越过相应 Schema 且备份恢复演练通过后，删除只读迁移代码，历史说明进入 `docs/archive/`。
+- 旧 WorldBook rollout/实验开关：WorldBook 稳定为按需特殊知识库后，合并重复开关；不能借清理兼容层改变 WorldBook 的低权限和按需召回边界。
+- PluginHost 实验适配器：正式插件 ABI、权限模型和签名策略稳定后，删除实验 manifest 别名与无隔离兼容入口，Feeling 等插件不得依赖这些入口长期运行。
+
+### 9.4 旧记忆、情绪与上下文系统退场基线
+
+“保留记忆系统”指保留真实用户证据与当前 MEM 能力，不代表永久保留每一代记忆实现。以下是 2026-08-02 代码盘点后的迁移台账；此处只冻结目标和删除门，不在 CYR.1 直接删除。
+
+| 旧项或过渡项 | 当前价值 | 长期目标 | 删除门槛与归档要求 |
+|---|---|---|---|
+| 关键词 `memory_candidates` 与 `maybe_create_candidate` 保守兜底 | 观察模型不可用时仍可产生待确认候选，并承接历史 pending 数据 | 由有证据约束的 Memory Observer/Writer 统一写入；必要时保留更小的纯程序 emergency extractor | Observer 多模型稳定、失败恢复可用、历史 pending 全部处理或导出、候选 API/UI 无调用；归档候选协议、迁移统计与测试报告 |
+| `memory-candidates` / `episode-candidates` 兼容 API 与 `candidate_id` 来源链 | 历史数据复核、自动整理回溯和旧客户端兼容 | 正式 Fragment/Episode/Saga API 与统一审计事件 | 后台队列不再依赖旧接口、支持的旧客户端退出、至少一个稳定发布周期、来源审计可由新协议完整表达；按 ADR-0023 退场条件逐项验收 |
+| 独立 ShortMemo 表、rollout 与 worker | 保存近期安排、承诺和项目状态 | 用户事实进入 MEM，行动项进入 Task/Reminder，临时对话信息由 CTX 管理 | TaskRun/Reminder 已上线，迁移脚本幂等，TTL/删除/临时聊天语义对齐，历史 ShortMemo 全量分类迁移并可回滚；删除 `assistant.short_memo.*` 设置和 shadow/active 开关 |
+| 关键词/FTS 回退检索 | FTS 不可用或查询过短时保障基本召回 | 统一检索规划下的 FTS + dense + entity + provenance，仍允许有界的程序降级 | 新检索链在索引缺失、离线模型不可用和损坏场景均有明确降级；若保留关键词路径，应改名为正式 emergency retrieval，而不是隐式旧逻辑 |
+| 旧自由文本会话摘要与 `allow_remote_history` 兼容字段 | 升级旧配置并重建连续性 | 结构化、可从原消息重建、有来源和修订控制的 CTX Summary | 所有受支持数据库完成重建，旧客户端停止写字段，摘要纠错与删除传播通过；归档旧字段映射，不保留双写 |
+| Memory Shadow 决策与旧 rollout 开关 | 收集冲突、保留和注入策略证据 | 通过门禁的 Advisory/Active 策略，或确定性 MEM 策略 | 校准报告达到门槛、失败回退和回滚验证完成；转 Active 后删除重复 shadow-only 存储与无消费者诊断，不能删除必要审计证据 |
+| `companion_state` 及内建 Affect/Relationship 状态链 | 当前语气指导、历史关系/情绪兼容 | 当轮用户状态留在受限表达指导；跨轮 Feeling 由正式插件系统承载，真实关系事实只进入 MEM | PluginHost 权限、隔离、数据所有权和卸载导出完成，Feeling 插件固定集通过；迁移真实用户事实，删除模拟遐蝶心境、关系数值驱动和内建双写，归档旧协议与 Schema 映射 |
+| 旧 `lore.py` 关键词 Lore 与 WorldBook R1 兼容内容入口 | 在 WorldBook 不命中或迁移期提供角色知识 | 单一、低权限、按需召回的 WorldBook/特殊知识库 | 新 WorldBook 覆盖现有有效条目，相关性、注入防护、来源与关闭行为通过；删除重复关键词清单和 `legacy_content` 桥，不改变现代知识边界 |
+| 旧主动陪伴/EAP 状态与来源适配 | 提醒、承诺、Presence、投递和反馈基础设施 | Task/Reminder/ToolResult 驱动的受控主动 Agent | CYR.2/CYR.3/CYR.7 完成，所有主动候选都有真实来源、任务和停止入口；迁移用户授权/安静时段/反馈，删除情绪或关系驱动来源 |
+| 旧 Context shadow planner、诊断别名与实验开关 | 对照实验、历史报告与安全回退 | 一个版本化 ContextAssembler 协议和可解释降级路径 | 新协议稳定发布、消费者迁移、基线报告归档；清除无读者开关和重复路径，但保留预算硬门、来源隔离和 body-free 审计 |
+
+旧记忆退场必须遵守以下额外原则：
+
+- 不因删除旧代码而删除用户原始消息、有效 Fragment、Entity、Episode、Saga、来源引用、纠错链或删除审计。
+- 先迁移和核对数据，再停止写入，再观察只读兼容窗口，最后删除表/API/代码；禁止同一版本内直接跨越全部阶段。
+- 派生摘要、索引、候选和状态缓存可以重建；用户原始证据与明确编辑不可被摘要替代。
+- 数据分类不确定时进入隔离/待复核队列，不把旧 Affect、LIFE 或 ShortMemo 字段机械转换成用户事实。
+- 每项退场都要有数量对账、抽样内容核对、失败回滚、备份恢复、隐私删除传播和启动器升级测试。
+
+任何退场提交都必须同时更新 README、本路线、迁移文档和测试，并在诊断日志中保留足以解释升级失败的版本信息。
