@@ -50,7 +50,7 @@ const PROACTIVE_DEFAULTS: Record<string, string> = {
   proactive_show_advanced_diagnostics: "0",
 };
 
-// 能力标签说明（stream/tools/vision/reasoning/local）。
+// 能力标签说明；只有已经探测或由本地适配器确认的能力才会显示。
 const CAP_DESC: { key: string; label: string; tone: "ok" | "cyan" | "violet" | "warn" }[] = [
   { key: "stream", label: "支持流式输出，逐字返回生成内容", tone: "ok" },
   { key: "tools", label: "支持函数调用与外部工具集成", tone: "cyan" },
@@ -58,6 +58,29 @@ const CAP_DESC: { key: string; label: string; tone: "ok" | "cyan" | "violet" | "
   { key: "reasoning", label: "支持深度推理与思维链过程", tone: "warn" },
   { key: "local", label: "本地模型，离线可用", tone: "violet" },
 ];
+
+const PERSONA_RUNTIME_LABEL = {
+  compatible: "可运行",
+  capability_limited: "能力受限",
+  incompatible: "不兼容",
+} as const;
+
+const PERSONA_RESOURCE_LABEL = {
+  healthy: "v2.3 完整",
+  degraded: "已回退 v2.2",
+  emergency: "紧急保底",
+} as const;
+
+const MODEL_LIMITATION_LABEL: Record<string, string> = {
+  provider_disabled: "Provider 已停用",
+  provider_endpoint_missing: "Provider 接口地址缺失",
+  model_missing: "未选择模型",
+  context_window_too_small: "上下文窗口不足",
+  context_window_unverified: "上下文窗口未验证",
+  vision_unverified: "图片能力未验证",
+  vision_unavailable: "不支持图片",
+  demo_model: "内置演示模型",
+};
 
 // 权限风险等级配置。
 type RiskLevel = {
@@ -754,22 +777,39 @@ export function SettingsPage({ onModelChanged, currentSessionId }: {
                   </button>
                 </div>
                 {current && (
-                  <div className="settings-current-hint">
-                    <span className="settings-current-label">
-                      正在使用：{current.provider_name} · {current.model}
-                    </span>
-                    {current.capabilities.length > 0 && (
-                      <span className="cap-tags">
-                        {current.capabilities.map((c) => {
-                          const cap = CAP_DESC.find((d) => d.key === c);
-                          return (
-                            <span key={c} className={`cap-tag cap-${cap?.tone || "violet"}`}>
-                              {c}
-                            </span>
-                          );
-                        })}
+                  <div className="settings-current-summary">
+                    <div className="settings-current-hint">
+                      <span className="settings-current-label">
+                        正在使用：{current.provider_name} · {current.model}
                       </span>
+                      {current.capabilities.length > 0 && (
+                        <span className="cap-tags">
+                          {current.capabilities.map((c) => {
+                            const cap = CAP_DESC.find((d) => d.key === c);
+                            return (
+                              <span key={c} className={`cap-tag cap-${cap?.tone || "violet"}`}>
+                                {c}
+                              </span>
+                            );
+                          })}
+                        </span>
+                      )}
+                    </div>
+                    <div className="settings-persona-status" data-runtime-status={current.persona_status.runtime_status}>
+                      <span>Persona：{PERSONA_RESOURCE_LABEL[current.persona_status.resource_status]}</span>
+                      <span>模型质量：{current.persona_status.quality_status === "verified" ? "已验证" : "未验证"}</span>
+                      <span>运行状态：{PERSONA_RUNTIME_LABEL[current.persona_status.runtime_status]}</span>
+                    </div>
+                    {current.persona_status.limitations.length > 0 && (
+                      <div className="settings-persona-limitations">
+                        {current.persona_status.limitations.map((code) => (
+                          <span key={code}>{MODEL_LIMITATION_LABEL[code] || code}</span>
+                        ))}
+                      </div>
                     )}
+                    <p className="settings-persona-note">
+                      “未验证”只表示尚无这组模型的质量评测记录，不影响 Persona 加载或普通聊天；功能限制只依据真实能力探测。
+                    </p>
                   </div>
                 )}
               </section>

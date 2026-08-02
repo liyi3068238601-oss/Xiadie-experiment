@@ -883,6 +883,36 @@ export interface CurrentModel {
   provider_name: string;
   model: string;
   capabilities: string[];
+  persona_status: {
+    resource_status: "healthy" | "degraded" | "emergency";
+    runtime_status: "compatible" | "capability_limited" | "incompatible";
+    quality_status: "verified" | "unverified";
+    quality_label: "quality-evaluation-only";
+    persona_profile: "v2.3" | "v2.2" | "emergency" | string;
+    limitations: string[];
+    capabilities: {
+      text_chat: "available" | "unavailable";
+      context: Record<string, unknown>;
+      vision: Record<string, unknown>;
+      tool_calling: "not_probed" | string;
+    };
+  };
+}
+
+export interface PersonaRuntimeStatus {
+  protocol_version: "persona-startup-check-v1";
+  status: "healthy" | "degraded" | "emergency";
+  requested_profile: string;
+  selector_status: "valid" | "invalid_defaulted";
+  selected_profile: "v2.3" | "v2.2" | "emergency";
+  profiles: Array<{
+    profile: string;
+    status: "healthy" | "invalid";
+    tokens: number | null;
+    failures: Array<{ code: string; profile: string; resource: string }>;
+  }>;
+  emergency: { profile_version: string; tokens: number; available: true };
+  model: CurrentModel["persona_status"] & { provider_id: string; model: string };
 }
 export type CognitionMode = "off" | "shadow" | "advisory" | "active";
 export type CognitionModelRole = "fast" | "reasoning" | "creative";
@@ -1362,6 +1392,7 @@ export const discoverProviderModels = (provider_id: string, base_url: string, ap
     body: JSON.stringify({ provider_id, base_url, api_key }),
   });
 export const getCurrentModel = () => j<CurrentModel>("/api/current-model");
+export const getPersonaStatus = () => j<PersonaRuntimeStatus>("/api/persona/status");
 export const setCurrentModel = (provider_id: string, model: string) =>
   j<CurrentModel>("/api/current-model", {
     method: "POST",

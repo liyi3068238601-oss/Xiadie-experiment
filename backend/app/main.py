@@ -62,6 +62,26 @@ from .observability.api import router as diagnostics_router
 logger = logging.getLogger(__name__)
 
 
+def _record_persona_startup_status(status: dict[str, object]) -> None:
+    log_event(
+        "persona.startup", "INFO" if status["status"] == "healthy" else "WARNING",
+        "persona_startup_check_completed", "Persona startup integrity check completed",
+        fields={
+            "status": status["status"],
+            "requested_profile": status["requested_profile"],
+            "selector_status": status["selector_status"],
+            "selected_profile": status["selected_profile"],
+            "protocol_version": status["protocol_version"],
+        },
+    )
+    for profile in status["profiles"]:
+        for failure in profile["failures"]:
+            log_event(
+                "persona.startup", "ERROR", "persona_resource_check_failed",
+                "Persona resource integrity check failed", fields=failure,
+            )
+
+
 def cleanup_orphan_attachments(max_age_seconds: float = 3600) -> int:
     """清理 message_attachments 表中的孤儿数据。
 
@@ -94,6 +114,8 @@ def cleanup_orphan_attachments(max_age_seconds: float = 3600) -> int:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init_db()
+    persona_status = persona_v2.startup_self_check()
+    _record_persona_startup_status(persona_status)
     cognition_runtime.recover_control_plane()
     # 启动时清理上一次运行遗留的孤儿附件（message_id IS NULL 且超过 1 小时）
     cleanup_orphan_attachments()
@@ -186,6 +208,14 @@ async def diagnostic_trace_middleware(request: Request, call_next):
 def health() -> dict:
     # 供 Electron 判断进程是否就绪，不暴露版本、配置或运行环境。
     return {"status": "ok"}
+
+
+@app.get("/api/persona/status")
+def persona_status() -> dict:
+    """Body-free Persona integrity plus model quality/capability diagnostics."""
+    status = persona_v2.startup_self_check(remember=False)
+    provider, model = _current_model()
+    return {**status, "model": _persona_model_status(provider, model, status)}
 
 
 # ---------------------------------------------------------------- 会话
@@ -653,6 +683,61 @@ def _context_capability(provider: dict | None, model: str):
     return context_budget.resolve_model_context_capability(
         provider, model, configured_profiles=configured,
     )
+
+
+def _persona_model_status(
+    provider: dict | None, model: str, startup_status: dict[str, object] | None = None,
+) -> dict[str, object]:
+    resource_status = startup_status or persona_v2.last_startup_status()
+    selected_profile = str(resource_status.get("selected_profile") or persona_v2.DEFAULT_PROFILE)
+    context_capability = _context_capability(provider, model)
+    vision = vision_capabilities.status(provider, model)
+    limitations: list[str] = []
+    incompatible: list[str] = []
+    if provider is not None and not provider.get("enabled"):
+        incompatible.append("provider_disabled")
+    if (
+        provider is not None
+        and provider.get("id") not in {"mock", "ollama"}
+        and not str(provider.get("base_url") or "").strip()
+    ):
+        incompatible.append("provider_endpoint_missing")
+    if not model.strip():
+        incompatible.append("model_missing")
+    minimum_window = (
+        persona_v2.PERSONA_TOKEN_LIMIT
+        + context_budget.MIN_OUTPUT_RESERVE_TOKENS
+        + context_budget.MIN_SAFETY_MARGIN_TOKENS
+    )
+    if context_capability.effective_context_window < minimum_window:
+        incompatible.append("context_window_too_small")
+    elif not context_capability.verified:
+        limitations.append("context_window_unverified")
+    if vision["status"] != "supported":
+        limitations.append(
+            "vision_unverified" if vision["status"] == "unknown" else "vision_unavailable"
+        )
+    if provider is None or provider.get("id") == "mock":
+        limitations.append("demo_model")
+    status = "incompatible" if incompatible else "capability_limited" if limitations else "compatible"
+    quality_profile = selected_profile if selected_profile in persona_v2.INSTALLED_PROFILES else persona_v2.DEFAULT_PROFILE
+    return {
+        "provider_id": str((provider or {}).get("id") or "mock"),
+        "model": model,
+        "runtime_status": status,
+        "quality_status": persona_v2.model_quality_status(
+            provider, model, profile=quality_profile,
+        ),
+        "quality_label": "quality-evaluation-only",
+        "persona_profile": selected_profile,
+        "limitations": [*incompatible, *limitations],
+        "capabilities": {
+            "text_chat": "available" if not incompatible else "unavailable",
+            "context": context_capability.public_meta(),
+            "vision": vision,
+            "tool_calling": "not_probed",
+        },
+    }
 
 
 @app.post("/api/chat")
@@ -1269,9 +1354,9 @@ async def chat(body: ChatIn) -> StreamingResponse:
         collected: list[str] = []
         narration_allowed = persona_output_guard.explicit_narration_requested(anchored_content)
         output_guard = persona_output_guard.NaturalDialogueStreamGuard(
-            enabled=persona_compilation.selected_v2 and not narration_allowed,
+            enabled=persona_compilation.output_guard_enabled and not narration_allowed,
             suppress_ungrounded_ambience=(
-                persona_compilation.selected_v2
+                persona_compilation.output_guard_enabled
                 and knowledge_recall.is_companion_smalltalk(anchored_content)
             ),
         )
@@ -3426,6 +3511,7 @@ async def discover_provider_models(body: DiscoverModelsIn) -> dict:
 def current_model() -> dict:
     prov, model = _current_model()
     context_capability = _context_capability(prov, model)
+    startup_status = persona_v2.startup_self_check(remember=False)
     return {
         "provider_id": prov["id"] if prov else "mock",
         "provider_name": prov["name"] if prov else "内置演示",
@@ -3433,6 +3519,10 @@ def current_model() -> dict:
         "capabilities": _capabilities(prov, model) if prov else ["local"],
         "vision_capability": vision_capabilities.status(prov, model),
         "context_capability": context_capability.public_meta(),
+        "persona_status": {
+            "resource_status": startup_status["status"],
+            **_persona_model_status(prov, model, startup_status),
+        },
     }
 
 
@@ -3458,7 +3548,6 @@ def _capabilities(prov: dict, model: str) -> list[str]:
         caps.append("reasoning")
     if vision_capabilities.status(prov, model)["status"] == "supported":
         caps.append("vision")
-    caps.append("tools")
     return caps
 
 

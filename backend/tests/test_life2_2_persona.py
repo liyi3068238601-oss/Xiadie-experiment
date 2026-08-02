@@ -128,6 +128,8 @@ def test_all_profile_corruption_falls_back_without_exposing_prompt(tmp_path, mon
         provider=_provider(), model="deepseek-v4-flash", rollout_mode="active",
     )
     meta = result.public_meta()
-    assert result.prompt == persona.PERSONA_PROMPT
+    assert result.prompt == persona_v2.EMERGENCY_PERSONA
+    assert result.selected_profile == "emergency"
+    assert result.profile_version == persona_v2.EMERGENCY_PROFILE_VERSION
     assert result.fallback_reason == "persona_all_profiles_invalid"
     assert "prompt" not in json.dumps(meta).casefold()

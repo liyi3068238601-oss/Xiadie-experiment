@@ -1,5 +1,6 @@
 """后端核心 API 冒烟测试（需求 11.2 工程验收）。"""
 import asyncio
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -559,6 +560,50 @@ def test_model_selection():
     cur = client.get("/api/current-model").json()
     assert cur["provider_id"] == "mock"
     assert "stream" in cur["capabilities"]
+    assert "tools" not in cur["capabilities"]
+    assert cur["persona_status"]["quality_status"] in {"verified", "unverified"}
+    assert cur["persona_status"]["runtime_status"] in {
+        "compatible", "capability_limited", "incompatible",
+    }
+
+
+def test_persona_status_is_body_free_and_separates_quality_from_runtime() -> None:
+    response = client.get("/api/persona/status")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["protocol_version"] == "persona-startup-check-v1"
+    assert payload["status"] == "healthy"
+    assert payload["selected_profile"] == "v2.3"
+    assert payload["model"]["quality_label"] == "quality-evaluation-only"
+    assert payload["model"]["quality_status"] in {"verified", "unverified"}
+    serialized = json.dumps(payload, ensure_ascii=False)
+    assert "你是遐蝶" not in serialized
+    assert "prompt" not in serialized.casefold()
+
+
+def test_persona_startup_failure_log_contains_safe_resource_identity(monkeypatch) -> None:
+    from app import main
+
+    events = []
+    monkeypatch.setattr(main, "log_event", lambda *args, **kwargs: events.append((args, kwargs)))
+    main._record_persona_startup_status({
+        "protocol_version": "persona-startup-check-v1",
+        "status": "degraded",
+        "requested_profile": "v2.3",
+        "selector_status": "valid",
+        "selected_profile": "v2.2",
+        "profiles": [{
+            "profile": "v2.3", "status": "invalid", "tokens": None,
+            "failures": [{
+                "code": "persona_hash_mismatch", "profile": "v2.3", "resource": "core",
+            }],
+        }],
+    })
+    assert events[0][0][2] == "persona_startup_check_completed"
+    assert events[1][0][2] == "persona_resource_check_failed"
+    assert events[1][1]["fields"] == {
+        "code": "persona_hash_mismatch", "profile": "v2.3", "resource": "core",
+    }
 
 
 def test_regenerate_does_not_duplicate_assistant():

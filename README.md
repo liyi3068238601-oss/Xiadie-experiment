@@ -4,9 +4,11 @@ Xiadie Experiment 保留“遐蝶”的稳定身份、人格和自然表达，�
 
 本仓库不再发展角色离线生活模拟。原 LIFE 生活连续性系统已完成物理退役：运行时代码、UI、API、worker、adapter 和专属数据库表已经移除，同时保留用户记忆、知识、会话连续性、任务事实和角色人格。
 
-> 当前状态（2026-08-02）：RETIRE.0～RETIRE.3 与 LOG.1～LOG.5 实验基线已投入使用。CYR.1 已完成：单 Agent Persona v2.3 已接入，用户始终面对同一个遐蝶，不需要切换 Chat/Work；Persona 负责身份、判断与语气，WorldBook 只作为按需召回的遐蝶特殊知识库，Memory 只记录真实互动。现有 v2.2 仅作为迁移期运行回退，WorldBook 内容本阶段未改动。
+> 当前状态（2026-08-02）：RETIRE.0～RETIRE.3、LOG.1～LOG.5 与 CYR.1 已合入 `main`。CYR.1S 启动安全稳定化已完成工程验证：启动时检查 Persona manifest、资源路径、hash 与 token；v2.3/v2.2 都失效时使用代码内置 emergency Persona；模型质量记录与运行能力限制分开显示。真实使用观察因需要时间暂缓，不阻塞本轮工程门禁。
 
 Persona v2.3 只依赖资源完整性和模型基本兼容能力，不依赖逐模型“认证”才能运行。模型固定集结果仅显示为已验证/未验证并用于发布质量管理；更换模型、Provider 或接口地址不会让 Persona 回退，也不会由 Persona 强制采样参数。
+
+当前迁移期回退链为 `v2.3 → v2.2 → 代码内置 emergency Persona`。其中 v2.2 仍是临时安全垫；长期在真实使用和多模型门禁完成后收敛为 `只读 v2.3 资源包 → emergency Persona`。
 
 ## 产品方向
 
@@ -265,7 +267,7 @@ npm.cmd test
 npm.cmd run build
 ```
 
-2026-08-02 最新门禁：后端 `2510 passed`；CYR.1 相关后端 `91 passed`；前端 `80 passed`；Vite 生产构建与 Python `compileall` 通过。现存提示仅为 Starlette/httpx 弃用提醒、测试缓存目录权限提醒，以及 Live2D Classic 脚本的既有 Vite 打包提示。上一 LOG 检查点的 Electron 入口脚本与真实本机鉴权 HTTP 诊断冒烟继续有效，本轮未修改对应链路。
+2026-08-02 最新门禁：后端 `2518 passed`；CYR.1S 相关后端 `105 passed`；前端 `81 passed`；Vite 生产构建与 Python `compileall` 通过。Persona 启动自检实测为 v2.3 `1442 tokens`、v2.2 `1400 tokens`、emergency `195 tokens`。现存提示仅为 Starlette/httpx 弃用提醒、测试缓存目录权限提醒，以及 Live2D Classic 脚本的既有 Vite 打包提示。真实使用观察仍待后续进行。
 
 退役施工必须额外验证：
 

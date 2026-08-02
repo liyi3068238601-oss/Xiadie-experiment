@@ -2962,6 +2962,14 @@ textarea {
 .settings-save-btn { margin-left: auto; }
 .settings-current-hint { margin-top: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .settings-current-label { color: var(--text-faint); font-size: 12px; }
+.settings-current-summary { display: grid; gap: 8px; }
+.settings-persona-status { display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--text-dim); font-size: 11px; }
+.settings-persona-status[data-runtime-status="compatible"] { color: var(--ok); }
+.settings-persona-status[data-runtime-status="capability_limited"] { color: var(--warn); }
+.settings-persona-status[data-runtime-status="incompatible"] { color: var(--danger); }
+.settings-persona-limitations { display: flex; flex-wrap: wrap; gap: 5px; }
+.settings-persona-limitations span { padding: 2px 7px; border-radius: 99px; color: var(--text-faint); background: rgba(111,104,144,.12); border: 1px solid rgba(111,104,144,.22); font-size: 10px; }
+.settings-persona-note { margin: 0; color: var(--text-faint); font-size: 11px; line-height: 1.55; }
 .settings-card .cap-tags { display: inline-flex; gap: 5px; flex-wrap: wrap; }
 .settings-card .cap-tag { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 10px; font-weight: 500; }
 .cap-tag.cap-ok { background: rgba(86,214,160,.15); color: var(--ok); border: 1px solid rgba(86,214,160,.25); }
