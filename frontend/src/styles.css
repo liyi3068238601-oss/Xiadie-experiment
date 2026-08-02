@@ -3672,6 +3672,21 @@ body {
 .task-source { color: #8c8592; }.task-source.from-chat { color: #79bad0; }
 .done .task-copy strong { text-decoration: line-through; opacity: .48; }.done .task-item { opacity: .72; }.done .task-item:hover { opacity: 1; }
 .task-actions { display: flex; gap: 5px; opacity: .72; }.task-item:hover .task-actions { opacity: 1; }.task-actions button { padding: 5px 8px; border: 1px solid rgba(187,177,221,.11); border-radius: 7px; color: #aaa3b0; font-size: 9px; }.task-actions .danger { color: var(--danger); }
+.task-workbench { display: block; }
+.task-primary-row { display: flex; align-items: center; gap: 11px; }
+.task-run-status { padding: 2px 6px; border-radius: 99px; color: #bbb1dc; background: rgba(124,92,255,.12); }
+.task-run-status.failed,.task-run-status.recovery_required { color: #e7a6a6; background: rgba(220,90,90,.1); }
+.task-run-status.completed { color: var(--ok); background: rgba(82,190,132,.09); }
+.task-run-panel { display: grid; gap: 6px; padding: 9px 0 1px 29px; }
+.task-run-panel p { margin: 0; color: #8f8994; font-size: 9px; }.task-run-panel p.error { color: #dd9292; }
+.task-run-progress { display: flex; align-items: center; gap: 8px; color: #87818c; font-size: 9px; }
+.task-run-progress i { width: 92px; height: 3px; overflow: hidden; border-radius: 9px; background: rgba(255,255,255,.06); }
+.task-run-progress i b { display: block; height: 100%; border-radius: inherit; background: var(--violet); }
+.task-run-progress code { color: #696470; font-size: 8px; }
+.task-node { display: flex; min-height: 25px; align-items: center; gap: 7px; padding: 3px 7px; border-left: 2px solid rgba(149,135,201,.16); color: #8d8792; font-size: 9px; }
+.task-node > span { display: grid; width: 16px; height: 16px; place-items: center; border-radius: 50%; background: rgba(255,255,255,.04); }
+.task-node > strong { flex: 1; font-size: 9px; font-weight: 500; }.task-node.running { color: #d8ceff; border-left-color: var(--violet); }.task-node.succeeded { color: var(--ok); }.task-node.failed { color: var(--danger); }
+.task-node button { padding: 3px 7px; border: 1px solid rgba(187,177,221,.11); border-radius: 6px; font-size: 8px; }.task-node button.danger { color: var(--danger); }
 
 .content-tabs { display: flex; gap: 22px; padding: 0 12px; margin: 0 0 17px; border-bottom: 1px solid var(--glass-border); }
 .content-tabs button { position: relative; padding: 9px 0; border: 0; border-radius: 0; color: #7e7884; background: transparent; font-size: 11px; }

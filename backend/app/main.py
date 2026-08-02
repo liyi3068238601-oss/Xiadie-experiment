@@ -32,7 +32,7 @@ from . import (
     knowledge_embeddings, knowledge_grants,
     knowledge_management, knowledge_parser, knowledge_policy, knowledge_recall, knowledge_recall_service, knowledge_search,
     knowledge_worker, kig_evidence, kig_governance, kig_maintenance, kig_pipeline, kig_sources, llm, lore, memory, memory_conflicts, memory_shadow_proposals,
-    persona, persona_output_guard, persona_v2, runtime_logs, short_memo, worldbook_r1,
+    persona, persona_output_guard, persona_v2, runtime_logs, short_memo, task_runs, worldbook_r1,
     saga_consolidator, saga_lifecycle, saga_summary,
     saga_summary_service, secret_store, slow_lifecycle, turn_ingress,
     chat_request_control, image_attachments, vision_capabilities,
@@ -121,6 +121,7 @@ async def lifespan(app: FastAPI):
     cleanup_orphan_attachments()
     image_attachments.cleanup_expired()
     conversation_summaries.recover_stale_runs()
+    task_runs.recover_stale_runs()
     await conversation_summary_service.start_worker()
     await companion_cognition_service.start_worker()
     await proactive_orchestrator.start_worker()
@@ -3320,6 +3321,46 @@ class TaskIn(BaseModel):
     source_session_id: Optional[str] = None
 
 
+class TaskRunIn(BaseModel):
+    goal_summary: str = Field(default="", max_length=500)
+    source_session_id: Optional[str] = None
+    idempotency_key: Optional[str] = Field(default=None, max_length=120)
+
+
+class TaskPlanNodeIn(BaseModel):
+    client_id: str = Field(min_length=1, max_length=80)
+    title: str = Field(min_length=1, max_length=240)
+    depends_on: list[str] = Field(default_factory=list, max_length=50)
+    completion_criteria: str = Field(default="", max_length=500)
+
+
+class TaskPlanIn(BaseModel):
+    nodes: list[TaskPlanNodeIn] = Field(min_length=1, max_length=50)
+    requires_approval: bool = False
+
+
+class TaskNodeActionIn(BaseModel):
+    action: str
+    output_summary: str = Field(default="", max_length=500)
+    error_code: Optional[str] = Field(default=None, max_length=120)
+    error_message: Optional[str] = Field(default=None, max_length=500)
+
+
+class TaskArtifactLinkIn(BaseModel):
+    artifact_id: str = Field(min_length=1, max_length=120)
+    node_id: Optional[str] = None
+    label: str = Field(default="", max_length=120)
+
+
+def _task_run_call(operation):
+    try:
+        return operation()
+    except task_runs.TaskRunError as error:
+        code = str(error)
+        status = 404 if code in {"task_not_found", "task_run_not_found", "task_node_not_found"} else 409
+        raise HTTPException(status, code) from error
+
+
 @app.get("/api/tasks")
 def list_tasks(today: bool = False) -> list[dict]:
     conn = db.connect()
@@ -3386,6 +3427,82 @@ def delete_task(tid: str) -> dict:
         return {"ok": True}
     finally:
         conn.close()
+
+
+@app.get("/api/tasks/{tid}/runs")
+def list_task_runs(tid: str) -> list[dict]:
+    return task_runs.list_for_task(tid)
+
+
+@app.post("/api/tasks/{tid}/runs")
+def create_task_run(tid: str, body: TaskRunIn) -> dict:
+    return _task_run_call(lambda: task_runs.create(
+        task_id=tid,
+        goal_summary=body.goal_summary,
+        source_session_id=body.source_session_id,
+        idempotency_key=body.idempotency_key,
+    ))
+
+
+@app.get("/api/task-runs/{run_id}")
+def get_task_run(run_id: str) -> dict:
+    result = task_runs.get(run_id)
+    if result is None:
+        raise HTTPException(404, "task_run_not_found")
+    return result
+
+
+@app.put("/api/task-runs/{run_id}/plan")
+def replace_task_run_plan(run_id: str, body: TaskPlanIn) -> dict:
+    nodes = [item.model_dump() for item in body.nodes]
+    return _task_run_call(lambda: task_runs.replace_plan(
+        run_id, nodes, requires_approval=body.requires_approval,
+    ))
+
+
+@app.post("/api/task-runs/{run_id}/approve")
+def approve_task_run(run_id: str) -> dict:
+    return _task_run_call(lambda: task_runs.approve(run_id))
+
+
+@app.post("/api/task-runs/{run_id}/start")
+def start_task_run(run_id: str) -> dict:
+    return _task_run_call(lambda: task_runs.start(run_id))
+
+
+@app.post("/api/task-runs/{run_id}/pause")
+def pause_task_run(run_id: str) -> dict:
+    return _task_run_call(lambda: task_runs.pause(run_id))
+
+
+@app.post("/api/task-runs/{run_id}/resume")
+def resume_task_run(run_id: str) -> dict:
+    return _task_run_call(lambda: task_runs.resume(run_id))
+
+
+@app.post("/api/task-runs/{run_id}/cancel")
+def cancel_task_run(run_id: str) -> dict:
+    return _task_run_call(lambda: task_runs.cancel(run_id))
+
+
+@app.post("/api/task-runs/{run_id}/replan")
+def replan_task_run(run_id: str) -> dict:
+    return _task_run_call(lambda: task_runs.replan(run_id))
+
+
+@app.post("/api/task-runs/{run_id}/nodes/{node_id}/action")
+def act_on_task_node(run_id: str, node_id: str, body: TaskNodeActionIn) -> dict:
+    return _task_run_call(lambda: task_runs.transition_node(
+        run_id, node_id, body.action, output_summary=body.output_summary,
+        error_code=body.error_code, error_message=body.error_message,
+    ))
+
+
+@app.post("/api/task-runs/{run_id}/artifacts")
+def link_task_run_artifact(run_id: str, body: TaskArtifactLinkIn) -> dict:
+    return _task_run_call(lambda: task_runs.link_artifact(
+        run_id, body.artifact_id, node_id=body.node_id, label=body.label,
+    ))
 
 
 # ---------------------------------------------------------------- 供应商 / 模型

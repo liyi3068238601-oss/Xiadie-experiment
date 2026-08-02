@@ -9,22 +9,68 @@ function SourceChip({ source }: { source: string }) {
   return <span className={`task-source${isChat ? " from-chat" : ""}`}>{isChat ? "来自对话" : "手动创建"}</span>;
 }
 
+const RUN_LABELS: Record<api.TaskRunStatus, string> = {
+  draft: "草稿", planning: "规划中", awaiting_approval: "等待批准", ready: "可开始",
+  running: "执行中", paused: "已暂停", recovery_required: "需要恢复",
+  completed: "已完成", failed: "失败", cancelled: "已取消",
+};
+
 export function TasksPage() {
   const [tasks, setTasks] = useState<api.Task[]>([]);
   const [title, setTitle] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [runs, setRuns] = useState<Record<string, api.TaskRun>>({});
 
   const refresh = () => {
     setLoading(true);
     api.listTasks()
-      .then((list) => {
+      .then(async (list) => {
         setTasks(list.filter((task) => task.status !== "archived"));
+        const latest = await Promise.all(list.map(async (task) => {
+          const taskRuns = await api.listTaskRuns(task.id);
+          if (!taskRuns[0]) return null;
+          return [task.id, await api.getTaskRun(taskRuns[0].id)] as const;
+        }));
+        setRuns(Object.fromEntries(latest.filter((item): item is readonly [string, api.TaskRun] => item !== null)));
         setError(null);
       })
       .catch((reason) => setError(reason?.message || "加载任务失败"))
       .finally(() => setLoading(false));
+  };
+
+  const createExecution = async (task: api.Task) => {
+    try {
+      const run = await api.createTaskRun(task.id, task.title);
+      await api.replaceTaskRunPlan(run.id, [{
+        client_id: "deliver", title: task.title, depends_on: [],
+        completion_criteria: "形成可核验的结果或明确失败原因",
+      }]);
+      toast("已建立执行计划，可在开始前继续由 Agent 调整");
+      refresh();
+    } catch (reason: any) {
+      toast(reason?.message || "建立执行失败");
+    }
+  };
+
+  const runAction = async (run: api.TaskRun, action: "approve" | "start" | "pause" | "resume" | "cancel" | "replan") => {
+    try {
+      await api.taskRunAction(run.id, action);
+      refresh();
+    } catch (reason: any) {
+      toast(reason?.message || "执行状态更新失败");
+    }
+  };
+
+  const nodeAction = async (run: api.TaskRun, node: api.TaskNode, action: "start" | "succeed" | "fail" | "skip") => {
+    try {
+      await api.taskNodeAction(run.id, node.id, action,
+        action === "fail" ? { error_code: "manual_step_failed", error_message: "用户标记步骤失败" } : {});
+      refresh();
+    } catch (reason: any) {
+      toast(reason?.message || "步骤状态更新失败");
+    }
   };
 
   useEffect(refresh, []);
@@ -111,23 +157,54 @@ export function TasksPage() {
           <header><span>{group.label}</span><b>{group.items.length}</b></header>
           {group.items.map((task) => {
             const done = task.status === "done";
+            const run = runs[task.id];
             return (
-              <article className="task-item" key={task.id}>
-                <button
-                  className={`task-check${done ? " checked" : ""}`}
-                  aria-label={done ? "标记为待办" : "标记为完成"}
-                  onClick={() => void changeStatus(task.id, done ? "todo" : "done")}
-                >{done ? "✓" : ""}</button>
-                <div className="task-copy">
-                  <strong>{task.title}</strong>
-                  <div><SourceChip source={task.source} />{task.due_date && <span>{task.due_date}</span>}</div>
+              <article className="task-item task-workbench" key={task.id}>
+                <div className="task-primary-row">
+                  <button
+                    className={`task-check${done ? " checked" : ""}`}
+                    aria-label={done ? "标记为待办" : "标记为完成"}
+                    onClick={() => void changeStatus(task.id, done ? "todo" : "done")}
+                  >{done ? "✓" : ""}</button>
+                  <div className="task-copy">
+                    <strong>{task.title}</strong>
+                    <div>
+                      <SourceChip source={task.source} />
+                      {task.due_date && <span>{task.due_date}</span>}
+                      {run && <span className={`task-run-status ${run.status}`}>{RUN_LABELS[run.status]}</span>}
+                    </div>
+                  </div>
+                  <div className="task-actions">
+                    {!run && !done && <button onClick={() => void createExecution(task)}>建立执行</button>}
+                    {run?.status === "awaiting_approval" && <button onClick={() => void runAction(run, "approve")}>批准</button>}
+                    {run?.status === "ready" && <button onClick={() => void runAction(run, "start")}>开始</button>}
+                    {run?.status === "running" && <button onClick={() => void runAction(run, "pause")}>暂停</button>}
+                    {(run?.status === "paused" || run?.status === "recovery_required") && <button onClick={() => void runAction(run, "resume")}>继续</button>}
+                    {run && !["completed", "cancelled"].includes(run.status) && <button onClick={() => void runAction(run, "replan")}>重规划</button>}
+                    {run && !["completed", "cancelled"].includes(run.status) && <button onClick={() => void runAction(run, "cancel")}>取消</button>}
+                    <button className="danger" onClick={() => void remove(task.id)}>删除</button>
+                  </div>
                 </div>
-                <div className="task-actions">
-                  {task.status === "todo" && <button onClick={() => void changeStatus(task.id, "doing")}>开始</button>}
-                  {task.status === "doing" && <button onClick={() => void changeStatus(task.id, "todo")}>暂停</button>}
-                  {done && <button onClick={() => void changeStatus(task.id, "todo")}>重开</button>}
-                  <button className="danger" onClick={() => void remove(task.id)}>删除</button>
-                </div>
+                {run && <div className="task-run-panel">
+                  <div className="task-run-progress">
+                    <span>{run.progress_current}/{run.progress_total} 步</span>
+                    <i><b style={{ width: `${run.progress_total ? (run.progress_current / run.progress_total) * 100 : 0}%` }} /></i>
+                    <code>{run.id}</code>
+                  </div>
+                  {(run.waiting_reason || run.error_message) && <p className={run.error_message ? "error" : ""}>
+                    {run.error_message || run.waiting_reason}
+                  </p>}
+                  {run.next_action && <p>下一步：{run.next_action}</p>}
+                  {run.nodes?.map((node) => <div className={`task-node ${node.status}`} key={node.id}>
+                    <span>{node.status === "succeeded" ? "✓" : node.position + 1}</span>
+                    <strong>{node.title}</strong>
+                    {run.status === "running" && node.status === "ready" && <button onClick={() => void nodeAction(run, node, "start")}>执行</button>}
+                    {run.status === "running" && node.status === "running" && <>
+                      <button onClick={() => void nodeAction(run, node, "succeed")}>完成</button>
+                      <button className="danger" onClick={() => void nodeAction(run, node, "fail")}>失败</button>
+                    </>}
+                  </div>)}
+                </div>}
               </article>
             );
           })}

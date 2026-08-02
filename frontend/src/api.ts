@@ -866,6 +866,46 @@ export interface Task {
   source_session_id?: string;
   updated_at: number;
 }
+export type TaskRunStatus =
+  | "draft" | "planning" | "awaiting_approval" | "ready" | "running"
+  | "paused" | "recovery_required" | "completed" | "failed" | "cancelled";
+export type TaskNodeStatus =
+  | "pending" | "ready" | "running" | "blocked"
+  | "succeeded" | "failed" | "skipped" | "cancelled";
+export interface TaskNode {
+  id: string;
+  task_run_id: string;
+  client_id: string;
+  position: number;
+  title: string;
+  status: TaskNodeStatus;
+  depends_on: string[];
+  completion_criteria: string;
+  output_summary: string;
+  error_code?: string | null;
+  error_message?: string | null;
+}
+export interface TaskRun {
+  id: string;
+  task_id: string;
+  trace_id: string;
+  status: TaskRunStatus;
+  revision: number;
+  plan_version: number;
+  goal_summary: string;
+  progress_current: number;
+  progress_total: number;
+  waiting_reason: string;
+  next_action: string;
+  error_code?: string | null;
+  error_message?: string | null;
+  nodes?: TaskNode[];
+  events?: Array<Record<string, unknown>>;
+  artifacts?: Array<Record<string, unknown>>;
+  tool_runs?: Array<Record<string, unknown>>;
+  created_at: number;
+  updated_at: number;
+}
 export interface Provider {
   id: string;
   name: string;
@@ -1376,6 +1416,30 @@ export const updateTask = (id: string, body: Partial<Task>) =>
   j<Task>(`/api/tasks/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 export const deleteTask = (id: string) =>
   j<{ ok: boolean }>(`/api/tasks/${id}`, { method: "DELETE" });
+export const listTaskRuns = (taskId: string) =>
+  j<TaskRun[]>(`/api/tasks/${taskId}/runs`);
+export const createTaskRun = (taskId: string, goalSummary = "") =>
+  j<TaskRun>(`/api/tasks/${taskId}/runs`, {
+    method: "POST", body: JSON.stringify({ goal_summary: goalSummary }),
+  });
+export const getTaskRun = (runId: string) => j<TaskRun>(`/api/task-runs/${runId}`);
+export const replaceTaskRunPlan = (
+  runId: string,
+  nodes: Array<{ client_id: string; title: string; depends_on?: string[]; completion_criteria?: string }>,
+  requiresApproval = false,
+) => j<TaskRun>(`/api/task-runs/${runId}/plan`, {
+  method: "PUT", body: JSON.stringify({ nodes, requires_approval: requiresApproval }),
+});
+export const taskRunAction = (runId: string, action: "approve" | "start" | "pause" | "resume" | "cancel" | "replan") =>
+  j<TaskRun>(`/api/task-runs/${runId}/${action}`, { method: "POST" });
+export const taskNodeAction = (
+  runId: string,
+  nodeId: string,
+  action: "start" | "succeed" | "fail" | "skip",
+  detail: { output_summary?: string; error_code?: string; error_message?: string } = {},
+) => j<TaskRun>(`/api/task-runs/${runId}/nodes/${nodeId}/action`, {
+  method: "POST", body: JSON.stringify({ action, ...detail }),
+});
 
 // ---- 模型 / 供应商 ----
 export const listProviders = () => j<Provider[]>("/api/providers");

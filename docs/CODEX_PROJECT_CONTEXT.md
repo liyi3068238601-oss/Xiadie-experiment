@@ -1,6 +1,6 @@
 # 遐蝶 Codex 项目上下文
 
-> 助手优先路线更新（2026-08-02）：`Xiadie-experiment` 已物理移除 LIFE 生活模拟。Persona、WorldBook 和 ShortMemo 中有通用价值的部分继续保留，但 ShortMemo 迁入 Task/CTX/MEM，InnerStateProjection 删除。旧路线文档集中归档到 `docs/archive/legacy-routes/`；当前先建设诊断日志底座，再推进 TaskRun、ToolRegistry 与插件宿主。
+> 助手优先路线更新（2026-08-02）：`Xiadie-experiment` 已物理移除 LIFE 生活模拟。Persona、WorldBook 和 ShortMemo 中有通用价值的部分继续保留，但 ShortMemo 迁入 Task/CTX/MEM，InnerStateProjection 删除。旧路线文档集中归档到 `docs/archive/legacy-routes/`；LOG.1～LOG.5 与 CYR.1/CYR.1S 已完成，当前推进 CYR.2 TaskRun，之后才进入 ToolRegistry 与插件宿主。
 
 > 状态：当前执行约束  
 > 适用对象：Codex、维护者和后续参与开发的协作者  
@@ -58,7 +58,7 @@
 
 1. 用户在当前任务中的明确指令。
 2. `docs/ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md`。
-3. 当前任务对应的现行专项计划；日志施工以 `docs/OBSERVABILITY_AND_DIAGNOSTIC_LOGGING_PLAN.md` 为准。
+3. 当前任务对应的现行专项计划；TaskRun 以 `docs/CYR2_TASKRUN_EXECUTION_WORKBENCH_PLAN.md` 为准，日志施工以 `docs/OBSERVABILITY_AND_DIAGNOSTIC_LOGGING_PLAN.md` 为准。
 4. `docs/CYRENE_STYLE_AGENT_EXPERIMENT_PLAN.md` 与 `docs/CYRENE_STYLE_AGENT_LONG_TERM_ROADMAP.md`。
 5. 本文件。
 6. `docs/XIADIE_LONG_TERM_ROADMAP.md`。

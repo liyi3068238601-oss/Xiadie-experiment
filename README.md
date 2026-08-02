@@ -4,7 +4,7 @@ Xiadie Experiment 保留“遐蝶”的稳定身份、人格和自然表达，�
 
 本仓库不再发展角色离线生活模拟。原 LIFE 生活连续性系统已完成物理退役：运行时代码、UI、API、worker、adapter 和专属数据库表已经移除，同时保留用户记忆、知识、会话连续性、任务事实和角色人格。
 
-> 当前状态（2026-08-02）：RETIRE.0～RETIRE.3、LOG.1～LOG.5 与 CYR.1 已合入 `main`。CYR.1S 启动安全稳定化已完成工程验证：启动时检查 Persona manifest、资源路径、hash 与 token；v2.3/v2.2 都失效时使用代码内置 emergency Persona；模型质量记录与运行能力限制分开显示。真实使用观察因需要时间暂缓，不阻塞本轮工程门禁。
+> 当前状态（2026-08-02）：RETIRE.0～RETIRE.3、LOG.1～LOG.5、CYR.1/CYR.1S 已合入 `main`。CYR.2A TaskRun 持久执行骨架已在当前开发分支完成工程验证：Schema 86、TaskRun/TaskNode/事件、计划 DAG 校验、显式恢复、幂等取消、ToolRun/Artifact 引用和最小任务台均已实现。真实使用观察因需要时间暂缓，不阻塞本轮工程门禁。
 
 Persona v2.3 只依赖资源完整性和模型基本兼容能力，不依赖逐模型“认证”才能运行。模型固定集结果仅显示为已验证/未验证并用于发布质量管理；更换模型、Provider 或接口地址不会让 Persona 回退，也不会由 Persona 强制采样参数。
 
@@ -78,6 +78,17 @@ LIFE 专属日程、日记和生活事件 decision kind 已随 RETIRE.1 删除�
 - EvidenceLink、答案支持度和引用白名单。
 - 用户、项目、文档和工具事实构成的 Personal World Model。
 - 实体消歧、合并、拆分和非破坏性维护。
+
+### TaskRun 执行工作台（CYR.2A）
+
+- `Task` 保存用户目标，`TaskRun` 保存一次具体执行，`TaskNode` 保存有依赖和验收条件的步骤。
+- 计划写入前验证引用与有向无环图；节点证据驱动进度、失败与完成，模型文字不能直接宣告成功。
+- 支持批准、开始、暂停、继续、取消和重新规划；重复取消与暂停幂等。
+- 应用重启会把遗留执行标为 `recovery_required`，等待用户明确继续，不在退出后秘密运行。
+- TaskRun 通过 `trace_id` 关联诊断日志与 ToolRun，并可保存未来正式 Artifact 的 ID 引用。
+- 当前任务台提供最小执行卡片；多节点计划编辑器、乐观并发和 Agent Planner 属于 CYR.2B/C。
+
+详细状态机、API、隐私边界和后续施工见 [CYR.2 TaskRun 执行工作台施工计划](docs/CYR2_TASKRUN_EXECUTION_WORKBENCH_PLAN.md)。
 
 旧 `life` 检索源与 LIFE adapter 已删除。PWM 不得保存模拟心境、虚构日程或遐蝶离线活动。
 
@@ -159,7 +170,8 @@ FastAPI Agent Core
         ├─ KIG / PWM 来源、证据与世界模型
         ├─ EAP 任务驱动主动帮助
         ├─ Observability / Trace / Audit / Diagnostic（LOG 路线）
-        └─ Task / ToolRegistry / Permission / Artifact（后续阶段）
+        ├─ Task / TaskRun / TaskNode / Recovery（CYR.2）
+        └─ ToolRegistry / Permission / Artifact（CYR.3）
 ```
 
 设计原则：
@@ -285,6 +297,7 @@ npm.cmd run build
 | [助手优先架构与 LIFE 退役迁移计划](docs/ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md) | 助手优先产品与退役迁移规范 |
 | [可观测性与诊断日志施工计划](docs/OBSERVABILITY_AND_DIAGNOSTIC_LOGGING_PLAN.md) | Logger、Trace、ToolRun、诊断终端与支持包施工规范 |
 | [CYR.1 单 Agent 与 Persona v2.3 施工计划](docs/CYR1_SINGLE_AGENT_PERSONA_V23_PLAN.md) | 单一遐蝶 Agent、自动表达策略、Persona 版本回退与 WorldBook 边界 |
+| [CYR.2 TaskRun 执行工作台施工计划](docs/CYR2_TASKRUN_EXECUTION_WORKBENCH_PLAN.md) | TaskRun/TaskNode 状态机、计划、恢复、取消、审计与任务台 |
 | [Cyrene 风格实验计划](docs/CYRENE_STYLE_AGENT_EXPERIMENT_PLAN.md) | 单 Agent 行为质量与能力分层实验路线 |
 | [Cyrene 风格助手长期规划](docs/CYRENE_STYLE_AGENT_LONG_TERM_ROADMAP.md) | Task、Tool、Research、MCP 与 Worker 长期路线 |
 | [项目上下文](docs/CODEX_PROJECT_CONTEXT.md) | 开发与治理约束 |
@@ -308,7 +321,7 @@ npm.cmd run build
 4. `[x]` RETIRE.3：Schema 84 备份并删除 LIFE 专属表。
 5. `[x]` LOG.0：可观测性、诊断日志、隐私和 ToolRun v2 协议冻结。
 6. `[x]` LOG.1～LOG.5 实验基线：统一 Logger、TraceContext、实时诊断终端、Electron 日志和支持包；发布级故障注入与负载硬化继续保留为门禁。
-7. `[-]` CYR.1～CYR.3：单 Agent Persona v2.3、TaskRun、ToolRegistry、权限、产物和恢复；CYR.1 已完成。
+7. `[-]` CYR.1～CYR.3：CYR.1/CYR.1S 已完成；CYR.2A 执行骨架已实现并验证中，下一批为计划编辑、并发合同与 Agent Planner；随后进入 ToolRegistry、权限和正式 Artifact。
 8. `[ ]` PLUG.0～PLUG.4：MoFox 风格插件宿主、Manifest、生命周期、权限和隔离；Feeling 作为插件候选。
 9. `[ ]` Web/Research、文件与代码工具、MCP 接入。
 10. `[ ]` PresentationAdapter 解耦并在替代入口稳定后移除 Live2D。

@@ -4210,6 +4210,94 @@ MIGRATIONS = [
             ON mental_activity_logs(trace_id,created_at,id);
         """,
     ),
+    (
+        86,
+        """
+        -- CYR.2A: durable TaskRun execution workbench foundation.
+        CREATE TABLE task_runs (
+            id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+            trace_id TEXT NOT NULL,
+            source_session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+            status TEXT NOT NULL CHECK(status IN (
+                'draft','planning','awaiting_approval','ready','running','paused',
+                'recovery_required','completed','failed','cancelled'
+            )),
+            revision INTEGER NOT NULL DEFAULT 1 CHECK(revision >= 1),
+            plan_version INTEGER NOT NULL DEFAULT 0 CHECK(plan_version >= 0),
+            goal_summary TEXT NOT NULL DEFAULT '' CHECK(length(goal_summary) <= 500),
+            current_node_id TEXT,
+            progress_current INTEGER NOT NULL DEFAULT 0 CHECK(progress_current >= 0),
+            progress_total INTEGER NOT NULL DEFAULT 0 CHECK(progress_total >= 0),
+            waiting_reason TEXT NOT NULL DEFAULT '' CHECK(length(waiting_reason) <= 240),
+            next_action TEXT NOT NULL DEFAULT '' CHECK(length(next_action) <= 240),
+            error_code TEXT,
+            error_message TEXT CHECK(error_message IS NULL OR length(error_message) <= 500),
+            started_at REAL,
+            finished_at REAL,
+            idempotency_key TEXT,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL
+        );
+        CREATE INDEX idx_task_runs_task ON task_runs(task_id,created_at DESC,id DESC);
+        CREATE INDEX idx_task_runs_status ON task_runs(status,updated_at,id);
+        CREATE INDEX idx_task_runs_trace ON task_runs(trace_id,created_at,id);
+        CREATE UNIQUE INDEX idx_task_runs_idempotency
+            ON task_runs(task_id,idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+        CREATE TABLE task_nodes (
+            id TEXT PRIMARY KEY,
+            task_run_id TEXT NOT NULL REFERENCES task_runs(id) ON DELETE CASCADE,
+            client_id TEXT NOT NULL CHECK(length(client_id) BETWEEN 1 AND 80),
+            position INTEGER NOT NULL CHECK(position >= 0),
+            title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 240),
+            status TEXT NOT NULL CHECK(status IN (
+                'pending','ready','running','blocked','succeeded','failed','skipped','cancelled'
+            )),
+            depends_on_json TEXT NOT NULL DEFAULT '[]',
+            completion_criteria TEXT NOT NULL DEFAULT '' CHECK(length(completion_criteria) <= 500),
+            output_summary TEXT NOT NULL DEFAULT '' CHECK(length(output_summary) <= 500),
+            error_code TEXT,
+            error_message TEXT CHECK(error_message IS NULL OR length(error_message) <= 500),
+            revision INTEGER NOT NULL DEFAULT 1 CHECK(revision >= 1),
+            started_at REAL,
+            finished_at REAL,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            UNIQUE(task_run_id,client_id),
+            UNIQUE(task_run_id,position)
+        );
+        CREATE INDEX idx_task_nodes_run ON task_nodes(task_run_id,position,id);
+        CREATE INDEX idx_task_nodes_status ON task_nodes(task_run_id,status,position);
+
+        CREATE TABLE task_run_events (
+            id TEXT PRIMARY KEY,
+            task_run_id TEXT NOT NULL REFERENCES task_runs(id) ON DELETE CASCADE,
+            node_id TEXT REFERENCES task_nodes(id) ON DELETE SET NULL,
+            event_type TEXT NOT NULL,
+            from_status TEXT,
+            to_status TEXT,
+            revision INTEGER NOT NULL,
+            reason_code TEXT,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            created_at REAL NOT NULL
+        );
+        CREATE INDEX idx_task_run_events_run
+            ON task_run_events(task_run_id,created_at,id);
+
+        CREATE TABLE task_run_artifact_links (
+            id TEXT PRIMARY KEY,
+            task_run_id TEXT NOT NULL REFERENCES task_runs(id) ON DELETE CASCADE,
+            node_id TEXT REFERENCES task_nodes(id) ON DELETE SET NULL,
+            artifact_id TEXT NOT NULL CHECK(length(artifact_id) BETWEEN 1 AND 120),
+            label TEXT NOT NULL DEFAULT '' CHECK(length(label) <= 120),
+            created_at REAL NOT NULL,
+            UNIQUE(task_run_id,artifact_id)
+        );
+        CREATE INDEX idx_task_run_artifacts_run
+            ON task_run_artifact_links(task_run_id,created_at,id);
+        """,
+    ),
 ]
 
 # 默认供应商：全部 OpenAI-Compatible。api_key 开发期存本地库，

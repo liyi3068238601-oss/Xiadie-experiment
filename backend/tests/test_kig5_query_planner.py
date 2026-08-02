@@ -189,4 +189,4 @@ def test_registry_reuses_cds_shadow_without_schema_migration():
         ).fetchone()[0])
     finally:
         conn.close()
-    assert version == 85
+        assert version == 86
