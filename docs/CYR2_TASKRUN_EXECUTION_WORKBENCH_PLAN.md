@@ -1,7 +1,8 @@
 # CYR.2 TaskRun 执行工作台施工计划
 
-> 状态：CYR.2A 已完成；CYR.2B 开源参考与 revision 并发合同已实现，其余施工中
+> 状态：CYR.2A 已完成；CYR.2B 开源参考与可选 revision 并发合同已实现；合同闭合批次设计已批准、尚未实施
 > 最后更新：2026-08-02
+> 当前批次设计：[CYR.2B 合同闭合批次设计](superpowers/specs/2026-08-02-cyr2b-contract-closure-design.md)
 > 适用范围：Task、TaskRun、TaskNode、恢复、任务台与执行审计
 > 前置基线：CYR.1/CYR.1S、LOG.1～LOG.5
 > 后续边界：ToolRegistry、PermissionGrant 与正式 Artifact 属于 CYR.3
@@ -128,7 +129,7 @@ CYR.2A 只实现“停止并等待显式恢复”；细粒度 checkpoint 和副�
 
 ### 5.3 并发计划
 
-CYR.2A 已使用 SQLite `BEGIN IMMEDIATE` 保证单次状态变化原子，但尚未把客户端期望 `revision` 暴露为强制 compare-and-swap。CYR.2B 必须增加 `expected_revision`，冲突返回 409，并给出当前状态与可重试动作。
+CYR.2A 已使用 SQLite `BEGIN IMMEDIATE` 保证单次状态变化原子；CYR.2B 首批已经让客户端可以提交 `expected_revision`，陈旧版本返回 409 和当前快照，但字段仍可省略，因此尚未形成不可绕过的 compare-and-swap。已批准的合同闭合批次将同时在 API 与 TaskRun 领域层强制 revision，补齐完整 Run/Node 状态矩阵、精确语义幂等、统一结构化 409 和零写入固定集。
 
 ## 6. 诊断与隐私
 
@@ -166,6 +167,7 @@ CYR.2B 参考以下开源项目的协议和交互思想，但不直接复制代�
 | [Prefect](https://github.com/PrefectHQ/prefect) | Apache-2.0 | Flow/Task 状态词汇、带类型的人机输入、暂停/恢复状态、运行历史 UI | 面向数据工作流和部署编排，直接采用会扩大产品与依赖面 |
 | [LangGraph Agent Chat UI](https://github.com/langchain-ai/agent-chat-ui) | MIT | interrupt/approval 在聊天界面的展示、执行状态与消息流并置 | 当前主窗口已有稳定 React 信息架构，只参考交互，不替换前端 |
 | [Temporal UI](https://github.com/temporalio/ui) | MIT | 运行摘要、事件历史、失败详情、关联 ID 与重试入口 | 面向 Temporal 服务端对象，不能直接映射遐蝶的 Task/Memory/Tool 权限语义 |
+| [Xiaoda Agent](https://github.com/long-safe-accont-4567-uvwxyz-9876/xiaoda-agent) | MIT | skipped 依赖防死锁测试、并行超时与部分结果、审批作用域、fail-closed、安全拒绝审计、Self-Wake 和线性工作流 UI | 多 Agent 黑板、提示词工作流和通用自动恢复与 Xiadie 单主控 Agent、TaskRun 权威状态及副作用恢复边界不兼容；只读评估基线为 `35e42de` |
 
 采用决策：
 
@@ -173,6 +175,8 @@ CYR.2B 参考以下开源项目的协议和交互思想，但不直接复制代�
 - 借 Temporal：命令先验证，再把事件与当前状态同事务提交；读查询不改变状态；取消是明确状态而不是成功的别名。
 - 借 Prefect：等待用户时显示需要什么输入、为什么等待、从哪里继续，而不是只显示“暂停”。
 - 借两类 UI：任务摘要与详细事件分层，普通用户看进度和下一动作，诊断页看 revision、trace、事件和安全错误。
+- 借 Xiaoda Agent：为 `skipped` 依赖解除、超时不挂死和拒绝路径审计建立固定集；记录“审批作用域必须绑定具体对象、高风险审批故障 fail closed”为 CYR.3 硬约束，但不把计划批准解释为工具许可。
+- 不采用 Xiaoda Agent 的多 Agent 共享黑板、提示词文件工作流或按错误字符串自动升级恢复；它们会形成第二事实源、绕开 TaskRun 状态证据，或在副作用未知时不安全重试。
 - 不引入外部 orchestrator、云服务或第二套 checkpoint 数据库；如果未来本地任务规模、并行 worker 或跨设备执行证明现有内核不足，再以 ADR 重新评估 Temporal/LangGraph 适配器。
 - 任何具体代码移植都必须单独做许可证、NOTICE 与来源审计；当前只采用通用架构思想。
 
@@ -191,11 +195,12 @@ CYR.2B 参考以下开源项目的协议和交互思想，但不直接复制代�
 
 ### CYR.2B：计划编辑与并发合同（施工中）
 
+- [x] `expected_revision` 可选乐观并发、409 当前快照与前端刷新恢复。
+- [x] 已实现冲突无写入和暂停/取消幂等首批固定集。
+- [ ] 按已批准设计强制 API/领域层 CAS，补齐完整 Run/Node 非法转换矩阵、精确语义幂等与统一 409。
+- [ ] 冻结 `awaiting_approval` 只批准计划的边界，并以 Schema 87 保存批准资格与节点跳过证据。
 - [ ] 结构化多节点计划编辑器、依赖可视化和验收条件编辑。
-- [x] `expected_revision` 乐观并发、409 当前快照与前端刷新恢复。
-- [x] 冲突、无写入与幂等终态 HTTP/模块固定集。
-- [ ] 完整非法转换矩阵与 SSE 状态更新。
-- [ ] `awaiting_approval` 与未来 ConfirmationRequest 的边界适配。
+- [ ] TaskRun 业务事件 SSE 状态更新。
 - [ ] 列出历史执行、失败原因与再次执行入口。
 
 ### CYR.2C：Agent Planner 与恢复策略
@@ -230,4 +235,4 @@ CYR.2 全阶段退出门：
 
 ## 11. 后续衔接
 
-CYR.2B 是下一施工批次。它完成后再进入 CYR.3：建立 ToolRegistry、PermissionGuard、ConfirmationRequest 和正式 Artifact。ToolRun 已有权威状态机，CYR.3 的工具适配器必须复用它，并把 `task_run_id` 与当前节点绑定；任何插件或工具不得直接把节点写成成功。
+CYR.2B 当前先执行合同闭合批次；其后依次推进多节点计划编辑、TaskRun SSE、执行历史与再次执行，再进入 CYR.2C Planner 与恢复策略。CYR.2 全阶段完成后才进入 CYR.3：建立 ToolRegistry、PermissionGuard、ConfirmationRequest 和正式 Artifact。ToolRun 已有权威状态机，CYR.3 的工具适配器必须复用它，并把 `task_run_id` 与当前节点绑定；任何插件或工具不得直接把节点写成成功。
