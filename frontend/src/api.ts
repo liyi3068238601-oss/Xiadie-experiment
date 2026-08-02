@@ -15,12 +15,14 @@ function requestHeaders(init?: RequestInit): Headers {
 export class ApiError extends Error {
   status: number;
   code?: string;
+  details?: Record<string, unknown>;
 
-  constructor(status: number, message: string, code?: string) {
+  constructor(status: number, message: string, code?: string, details?: Record<string, unknown>) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -30,14 +32,14 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
     headers: requestHeaders(init),
   });
   if (!r.ok) {
-    let detail: string | { code?: string; message?: string } = r.statusText;
+    let detail: string | { code?: string; message?: string; [key: string]: unknown } = r.statusText;
     try {
       detail = (await r.json()).detail || detail;
     } catch {
       /* ignore */
     }
     if (typeof detail === "object") {
-      throw new ApiError(r.status, detail.message || r.statusText, detail.code);
+      throw new ApiError(r.status, detail.message || detail.code || r.statusText, detail.code, detail);
     }
     throw new ApiError(r.status, detail);
   }
@@ -1427,16 +1429,24 @@ export const replaceTaskRunPlan = (
   runId: string,
   nodes: Array<{ client_id: string; title: string; depends_on?: string[]; completion_criteria?: string }>,
   requiresApproval = false,
+  expectedRevision?: number,
 ) => j<TaskRun>(`/api/task-runs/${runId}/plan`, {
-  method: "PUT", body: JSON.stringify({ nodes, requires_approval: requiresApproval }),
+  method: "PUT", body: JSON.stringify({
+    nodes, requires_approval: requiresApproval, expected_revision: expectedRevision,
+  }),
 });
-export const taskRunAction = (runId: string, action: "approve" | "start" | "pause" | "resume" | "cancel" | "replan") =>
-  j<TaskRun>(`/api/task-runs/${runId}/${action}`, { method: "POST" });
+export const taskRunAction = (
+  runId: string,
+  action: "approve" | "start" | "pause" | "resume" | "cancel" | "replan",
+  expectedRevision?: number,
+) => j<TaskRun>(`/api/task-runs/${runId}/${action}`, {
+  method: "POST", body: JSON.stringify({ expected_revision: expectedRevision }),
+});
 export const taskNodeAction = (
   runId: string,
   nodeId: string,
   action: "start" | "succeed" | "fail" | "skip",
-  detail: { output_summary?: string; error_code?: string; error_message?: string } = {},
+  detail: { output_summary?: string; error_code?: string; error_message?: string; expected_revision?: number } = {},
 ) => j<TaskRun>(`/api/task-runs/${runId}/nodes/${nodeId}/action`, {
   method: "POST", body: JSON.stringify({ action, ...detail }),
 });

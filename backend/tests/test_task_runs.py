@@ -129,6 +129,26 @@ def test_artifact_is_a_reference_and_toolrun_link_is_visible():
     assert linked["events"][-1]["event_type"] == "task_artifact_linked"
 
 
+def test_expected_revision_rejects_stale_mutations_without_writing():
+    run = _planned_run()
+    before_events = len(run["events"])
+    with pytest.raises(task_runs.TaskRunConflict) as captured:
+        task_runs.start(run["id"], expected_revision=run["revision"] - 1)
+    assert captured.value.current["revision"] == run["revision"]
+    unchanged = task_runs.get(run["id"])
+    assert unchanged is not None
+    assert unchanged["status"] == "ready"
+    assert len(unchanged["events"]) == before_events
+
+
+def test_idempotent_terminal_action_accepts_stale_revision():
+    run = _planned_run()
+    cancelled = task_runs.cancel(run["id"], expected_revision=run["revision"])
+    again = task_runs.cancel(run["id"], expected_revision=run["revision"])
+    assert again["revision"] == cancelled["revision"]
+    assert len(again["events"]) == len(cancelled["events"])
+
+
 def test_http_contract_exposes_plan_and_actions():
     from fastapi.testclient import TestClient
     from app.main import app
@@ -155,3 +175,24 @@ def test_http_contract_exposes_plan_and_actions():
                             json={"action": "succeed"}, headers=headers)
     assert completed.status_code == 200
     assert completed.json()["status"] == "completed"
+
+
+def test_http_revision_conflict_returns_current_snapshot():
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    client = TestClient(app)
+    headers = {"X-Xiadie-Token": "test-token-with-at-least-thirty-two-bytes"}
+    task_id = client.post("/api/tasks", json={"title": "并发合同"}, headers=headers).json()["id"]
+    run = client.post(f"/api/tasks/{task_id}/runs", json={}, headers=headers).json()
+    planned = client.put(f"/api/task-runs/{run['id']}/plan", json={
+        "expected_revision": run["revision"],
+        "nodes": [{"client_id": "one", "title": "唯一步骤", "depends_on": []}],
+    }, headers=headers).json()
+    conflict = client.post(f"/api/task-runs/{run['id']}/start",
+                           json={"expected_revision": run["revision"]}, headers=headers)
+    assert conflict.status_code == 409
+    detail = conflict.json()["detail"]
+    assert detail["code"] == "task_run_revision_conflict"
+    assert detail["current"]["revision"] == planned["revision"]
+    assert detail["current"]["status"] == "ready"

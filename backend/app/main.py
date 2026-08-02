@@ -3337,10 +3337,16 @@ class TaskPlanNodeIn(BaseModel):
 class TaskPlanIn(BaseModel):
     nodes: list[TaskPlanNodeIn] = Field(min_length=1, max_length=50)
     requires_approval: bool = False
+    expected_revision: Optional[int] = Field(default=None, ge=1)
+
+
+class TaskRunRevisionIn(BaseModel):
+    expected_revision: Optional[int] = Field(default=None, ge=1)
 
 
 class TaskNodeActionIn(BaseModel):
     action: str
+    expected_revision: Optional[int] = Field(default=None, ge=1)
     output_summary: str = Field(default="", max_length=500)
     error_code: Optional[str] = Field(default=None, max_length=120)
     error_message: Optional[str] = Field(default=None, max_length=500)
@@ -3350,11 +3356,17 @@ class TaskArtifactLinkIn(BaseModel):
     artifact_id: str = Field(min_length=1, max_length=120)
     node_id: Optional[str] = None
     label: str = Field(default="", max_length=120)
+    expected_revision: Optional[int] = Field(default=None, ge=1)
 
 
 def _task_run_call(operation):
     try:
         return operation()
+    except task_runs.TaskRunConflict as error:
+        raise HTTPException(409, {
+            "code": "task_run_revision_conflict",
+            "current": error.current,
+        }) from error
     except task_runs.TaskRunError as error:
         code = str(error)
         status = 404 if code in {"task_not_found", "task_run_not_found", "task_node_not_found"} else 409
@@ -3457,37 +3469,50 @@ def replace_task_run_plan(run_id: str, body: TaskPlanIn) -> dict:
     nodes = [item.model_dump() for item in body.nodes]
     return _task_run_call(lambda: task_runs.replace_plan(
         run_id, nodes, requires_approval=body.requires_approval,
+        expected_revision=body.expected_revision,
     ))
 
 
 @app.post("/api/task-runs/{run_id}/approve")
-def approve_task_run(run_id: str) -> dict:
-    return _task_run_call(lambda: task_runs.approve(run_id))
+def approve_task_run(run_id: str, body: Optional[TaskRunRevisionIn] = None) -> dict:
+    return _task_run_call(lambda: task_runs.approve(
+        run_id, expected_revision=body.expected_revision if body else None,
+    ))
 
 
 @app.post("/api/task-runs/{run_id}/start")
-def start_task_run(run_id: str) -> dict:
-    return _task_run_call(lambda: task_runs.start(run_id))
+def start_task_run(run_id: str, body: Optional[TaskRunRevisionIn] = None) -> dict:
+    return _task_run_call(lambda: task_runs.start(
+        run_id, expected_revision=body.expected_revision if body else None,
+    ))
 
 
 @app.post("/api/task-runs/{run_id}/pause")
-def pause_task_run(run_id: str) -> dict:
-    return _task_run_call(lambda: task_runs.pause(run_id))
+def pause_task_run(run_id: str, body: Optional[TaskRunRevisionIn] = None) -> dict:
+    return _task_run_call(lambda: task_runs.pause(
+        run_id, expected_revision=body.expected_revision if body else None,
+    ))
 
 
 @app.post("/api/task-runs/{run_id}/resume")
-def resume_task_run(run_id: str) -> dict:
-    return _task_run_call(lambda: task_runs.resume(run_id))
+def resume_task_run(run_id: str, body: Optional[TaskRunRevisionIn] = None) -> dict:
+    return _task_run_call(lambda: task_runs.resume(
+        run_id, expected_revision=body.expected_revision if body else None,
+    ))
 
 
 @app.post("/api/task-runs/{run_id}/cancel")
-def cancel_task_run(run_id: str) -> dict:
-    return _task_run_call(lambda: task_runs.cancel(run_id))
+def cancel_task_run(run_id: str, body: Optional[TaskRunRevisionIn] = None) -> dict:
+    return _task_run_call(lambda: task_runs.cancel(
+        run_id, expected_revision=body.expected_revision if body else None,
+    ))
 
 
 @app.post("/api/task-runs/{run_id}/replan")
-def replan_task_run(run_id: str) -> dict:
-    return _task_run_call(lambda: task_runs.replan(run_id))
+def replan_task_run(run_id: str, body: Optional[TaskRunRevisionIn] = None) -> dict:
+    return _task_run_call(lambda: task_runs.replan(
+        run_id, expected_revision=body.expected_revision if body else None,
+    ))
 
 
 @app.post("/api/task-runs/{run_id}/nodes/{node_id}/action")
@@ -3495,6 +3520,7 @@ def act_on_task_node(run_id: str, node_id: str, body: TaskNodeActionIn) -> dict:
     return _task_run_call(lambda: task_runs.transition_node(
         run_id, node_id, body.action, output_summary=body.output_summary,
         error_code=body.error_code, error_message=body.error_message,
+        expected_revision=body.expected_revision,
     ))
 
 
@@ -3502,6 +3528,7 @@ def act_on_task_node(run_id: str, node_id: str, body: TaskNodeActionIn) -> dict:
 def link_task_run_artifact(run_id: str, body: TaskArtifactLinkIn) -> dict:
     return _task_run_call(lambda: task_runs.link_artifact(
         run_id, body.artifact_id, node_id=body.node_id, label=body.label,
+        expected_revision=body.expected_revision,
     ))
 
 

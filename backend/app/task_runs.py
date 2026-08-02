@@ -27,6 +27,17 @@ class TaskRunError(ValueError):
     pass
 
 
+class TaskRunConflict(TaskRunError):
+    def __init__(self, current: Any):
+        super().__init__("task_run_revision_conflict")
+        self.current = _decode_run(current)
+
+
+def _check_revision(run: Any, expected_revision: int | None) -> None:
+    if expected_revision is not None and int(run["revision"]) != int(expected_revision):
+        raise TaskRunConflict(run)
+
+
 def _text(value: object, limit: int) -> str:
     return redact_text(str(value or "").strip(), limit=limit)
 
@@ -183,14 +194,16 @@ def _validate_plan(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return normalized
 
 
-def replace_plan(run_id: str, nodes: list[dict[str, Any]], *, requires_approval: bool = False) -> dict[str, Any]:
-    plan = _validate_plan(nodes)
+def replace_plan(run_id: str, nodes: list[dict[str, Any]], *, requires_approval: bool = False,
+                 expected_revision: int | None = None) -> dict[str, Any]:
     conn = db.connect()
     try:
         conn.execute("BEGIN IMMEDIATE")
         run = conn.execute("SELECT * FROM task_runs WHERE id=?", (run_id,)).fetchone()
         if run is None:
             raise TaskRunError("task_run_not_found")
+        _check_revision(run, expected_revision)
+        plan = _validate_plan(nodes)
         if run["status"] not in {"draft", "planning", "paused", "recovery_required", "failed"}:
             raise TaskRunError("task_plan_replace_not_allowed")
         old_status = run["status"]
@@ -227,44 +240,43 @@ def replace_plan(run_id: str, nodes: list[dict[str, Any]], *, requires_approval:
     return get(run_id) or _decode_run(updated)
 
 
-def approve(run_id: str) -> dict[str, Any]:
-    return transition(run_id, "ready", event_type="task_plan_approved", next_action="开始执行")
+def approve(run_id: str, *, expected_revision: int | None = None) -> dict[str, Any]:
+    return transition(run_id, "ready", event_type="task_plan_approved", next_action="开始执行",
+                      expected_revision=expected_revision)
 
 
-def start(run_id: str) -> dict[str, Any]:
-    result = transition(run_id, "running", event_type="task_run_started", next_action="执行可用步骤")
+def start(run_id: str, *, expected_revision: int | None = None) -> dict[str, Any]:
+    result = transition(run_id, "running", event_type="task_run_started", next_action="执行可用步骤",
+                        expected_revision=expected_revision)
     _refresh_ready_nodes(run_id)
     return get(run_id) or result
 
 
-def pause(run_id: str) -> dict[str, Any]:
-    current = get(run_id)
-    if current and current["status"] == "paused":
-        return current
+def pause(run_id: str, *, expected_revision: int | None = None) -> dict[str, Any]:
     return transition(run_id, "paused", event_type="task_run_paused", waiting_reason="已由用户暂停",
-                      next_action="继续或重新规划")
+                      next_action="继续或重新规划", expected_revision=expected_revision)
 
 
-def resume(run_id: str) -> dict[str, Any]:
-    result = transition(run_id, "running", event_type="task_run_resumed", next_action="执行可用步骤")
+def resume(run_id: str, *, expected_revision: int | None = None) -> dict[str, Any]:
+    result = transition(run_id, "running", event_type="task_run_resumed", next_action="执行可用步骤",
+                        expected_revision=expected_revision)
     _refresh_ready_nodes(run_id)
     return get(run_id) or result
 
 
-def cancel(run_id: str) -> dict[str, Any]:
-    current = get(run_id)
-    if current and current["status"] == "cancelled":
-        return current
-    return transition(run_id, "cancelled", event_type="task_run_cancelled", next_action="")
+def cancel(run_id: str, *, expected_revision: int | None = None) -> dict[str, Any]:
+    return transition(run_id, "cancelled", event_type="task_run_cancelled", next_action="",
+                      expected_revision=expected_revision)
 
 
-def replan(run_id: str) -> dict[str, Any]:
-    return transition(run_id, "planning", event_type="task_replan_requested", next_action="提交新计划")
+def replan(run_id: str, *, expected_revision: int | None = None) -> dict[str, Any]:
+    return transition(run_id, "planning", event_type="task_replan_requested", next_action="提交新计划",
+                      expected_revision=expected_revision)
 
 
 def transition(run_id: str, target: str, *, event_type: str, waiting_reason: str = "",
                next_action: str = "", error_code: str | None = None,
-               error_message: str | None = None) -> dict[str, Any]:
+               error_message: str | None = None, expected_revision: int | None = None) -> dict[str, Any]:
     conn = db.connect()
     try:
         conn.execute("BEGIN IMMEDIATE")
@@ -272,6 +284,10 @@ def transition(run_id: str, target: str, *, event_type: str, waiting_reason: str
         if run is None:
             raise TaskRunError("task_run_not_found")
         old = str(run["status"])
+        if old == target and target in {"paused", "cancelled"}:
+            conn.rollback()
+            return get(run_id) or _decode_run(run)
+        _check_revision(run, expected_revision)
         if target not in RUN_TRANSITIONS.get(old, set()):
             raise TaskRunError("task_run_transition_invalid")
         now = db.now()
@@ -342,7 +358,8 @@ def _refresh_ready_nodes(run_id: str, conn=None) -> None:
 
 
 def transition_node(run_id: str, node_id: str, action: str, *, output_summary: str = "",
-                    error_code: str | None = None, error_message: str | None = None) -> dict[str, Any]:
+                    error_code: str | None = None, error_message: str | None = None,
+                    expected_revision: int | None = None) -> dict[str, Any]:
     targets = {"start": "running", "succeed": "succeeded", "fail": "failed", "skip": "skipped"}
     if action not in targets:
         raise TaskRunError("task_node_action_invalid")
@@ -353,6 +370,7 @@ def transition_node(run_id: str, node_id: str, action: str, *, output_summary: s
         node = conn.execute("SELECT * FROM task_nodes WHERE id=? AND task_run_id=?", (node_id, run_id)).fetchone()
         if run is None or node is None:
             raise TaskRunError("task_node_not_found")
+        _check_revision(run, expected_revision)
         if run["status"] != "running":
             raise TaskRunError("task_run_not_running")
         old = node["status"]
@@ -423,13 +441,15 @@ def transition_node(run_id: str, node_id: str, action: str, *, output_summary: s
     return current
 
 
-def link_artifact(run_id: str, artifact_id: str, *, node_id: str | None = None, label: str = "") -> dict[str, Any]:
+def link_artifact(run_id: str, artifact_id: str, *, node_id: str | None = None, label: str = "",
+                  expected_revision: int | None = None) -> dict[str, Any]:
     conn = db.connect()
     try:
         conn.execute("BEGIN IMMEDIATE")
         run = conn.execute("SELECT * FROM task_runs WHERE id=?", (run_id,)).fetchone()
         if run is None:
             raise TaskRunError("task_run_not_found")
+        _check_revision(run, expected_revision)
         if node_id and conn.execute("SELECT 1 FROM task_nodes WHERE id=? AND task_run_id=?", (node_id, run_id)).fetchone() is None:
             raise TaskRunError("task_node_not_found")
         link_id = f"tal_{db.new_id()}"

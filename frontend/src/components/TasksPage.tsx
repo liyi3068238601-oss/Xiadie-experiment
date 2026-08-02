@@ -46,7 +46,7 @@ export function TasksPage() {
       await api.replaceTaskRunPlan(run.id, [{
         client_id: "deliver", title: task.title, depends_on: [],
         completion_criteria: "形成可核验的结果或明确失败原因",
-      }]);
+      }], false, run.revision);
       toast("已建立执行计划，可在开始前继续由 Agent 调整");
       refresh();
     } catch (reason: any) {
@@ -56,9 +56,14 @@ export function TasksPage() {
 
   const runAction = async (run: api.TaskRun, action: "approve" | "start" | "pause" | "resume" | "cancel" | "replan") => {
     try {
-      await api.taskRunAction(run.id, action);
+      await api.taskRunAction(run.id, action, run.revision);
       refresh();
     } catch (reason: any) {
+      if (reason?.code === "task_run_revision_conflict") {
+        toast("任务已在别处更新，已刷新到最新状态");
+        refresh();
+        return;
+      }
       toast(reason?.message || "执行状态更新失败");
     }
   };
@@ -66,9 +71,16 @@ export function TasksPage() {
   const nodeAction = async (run: api.TaskRun, node: api.TaskNode, action: "start" | "succeed" | "fail" | "skip") => {
     try {
       await api.taskNodeAction(run.id, node.id, action,
-        action === "fail" ? { error_code: "manual_step_failed", error_message: "用户标记步骤失败" } : {});
+        action === "fail"
+          ? { error_code: "manual_step_failed", error_message: "用户标记步骤失败", expected_revision: run.revision }
+          : { expected_revision: run.revision });
       refresh();
     } catch (reason: any) {
+      if (reason?.code === "task_run_revision_conflict") {
+        toast("步骤状态已经变化，已刷新任务");
+        refresh();
+        return;
+      }
       toast(reason?.message || "步骤状态更新失败");
     }
   };

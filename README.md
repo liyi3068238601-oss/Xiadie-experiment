@@ -4,7 +4,7 @@ Xiadie Experiment 保留“遐蝶”的稳定身份、人格和自然表达，�
 
 本仓库不再发展角色离线生活模拟。原 LIFE 生活连续性系统已完成物理退役：运行时代码、UI、API、worker、adapter 和专属数据库表已经移除，同时保留用户记忆、知识、会话连续性、任务事实和角色人格。
 
-> 当前状态（2026-08-02）：RETIRE.0～RETIRE.3、LOG.1～LOG.5、CYR.1/CYR.1S 已合入 `main`。CYR.2A TaskRun 持久执行骨架已在当前开发分支完成工程验证：Schema 86、TaskRun/TaskNode/事件、计划 DAG 校验、显式恢复、幂等取消、ToolRun/Artifact 引用和最小任务台均已实现。真实使用观察因需要时间暂缓，不阻塞本轮工程门禁。
+> 当前状态（2026-08-02）：RETIRE.0～RETIRE.3、LOG.1～LOG.5、CYR.1/CYR.1S 已合入 `main`。CYR.2A TaskRun 持久执行骨架已完成工程验证；CYR.2B 已开始，首批完成开源参考边界、`expected_revision` 乐观并发、409 当前快照和前端冲突刷新。真实使用观察因需要时间暂缓，不阻塞本轮工程门禁。
 
 Persona v2.3 只依赖资源完整性和模型基本兼容能力，不依赖逐模型“认证”才能运行。模型固定集结果仅显示为已验证/未验证并用于发布质量管理；更换模型、Provider 或接口地址不会让 Persona 回退，也不会由 Persona 强制采样参数。
 
@@ -87,6 +87,7 @@ LIFE 专属日程、日记和生活事件 decision kind 已随 RETIRE.1 删除�
 - 应用重启会把遗留执行标为 `recovery_required`，等待用户明确继续，不在退出后秘密运行。
 - TaskRun 通过 `trace_id` 关联诊断日志与 ToolRun，并可保存未来正式 Artifact 的 ID 引用。
 - 当前任务台提供最小执行卡片；多节点计划编辑器、乐观并发和 Agent Planner 属于 CYR.2B/C。
+- CYR.2B 借鉴 LangGraph 的 checkpoint/interrupt、Temporal 的事务事件历史与 Update validator、Prefect 的暂停输入和运行状态 UI；只采用协议思想，不引入外部编排运行时或第二套状态数据库。
 
 详细状态机、API、隐私边界和后续施工见 [CYR.2 TaskRun 执行工作台施工计划](docs/CYR2_TASKRUN_EXECUTION_WORKBENCH_PLAN.md)。
 

@@ -1,6 +1,6 @@
 # CYR.2 TaskRun 执行工作台施工计划
 
-> 状态：CYR.2A 执行骨架已实现，CYR.2B～CYR.2D 待施工
+> 状态：CYR.2A 已完成；CYR.2B 开源参考与 revision 并发合同已实现，其余施工中
 > 最后更新：2026-08-02
 > 适用范围：Task、TaskRun、TaskNode、恢复、任务台与执行审计
 > 前置基线：CYR.1/CYR.1S、LOG.1～LOG.5
@@ -102,7 +102,7 @@ Schema 85 已有的 `tool_runs.task_run_id` 在 CYR.2 获得真实父对象，Ta
 | `POST .../nodes/{node_id}/action` | 受状态机约束地推进节点；未来主要由执行器调用 |
 | `POST .../artifacts` | 关联未来 Artifact ID，不创建文件 |
 
-API 使用稳定的机器错误码，例如 `task_plan_cycle`、`task_run_transition_invalid`、`task_node_transition_invalid`。不存在返回 404；无效计划和非法转换返回 409。CYR.2B 会补充 HTTP 合同固定集与乐观并发冲突响应。
+API 使用稳定的机器错误码，例如 `task_plan_cycle`、`task_run_transition_invalid`、`task_node_transition_invalid`。不存在返回 404；无效计划和非法转换返回 409。所有变更接口可携带 `expected_revision`；版本陈旧时返回 409、`task_run_revision_conflict` 和当前 TaskRun 快照，客户端刷新后由用户重试，不静默覆盖新状态。
 
 ## 5. 恢复、取消与并发
 
@@ -155,7 +155,28 @@ CYR.2A 在现有 Tasks 页面增加了最小执行卡片：
 
 默认单节点计划只是迁移期入口，不是最终 Planner。CYR.2B 要增加结构化计划编辑器；CYR.2C 再接入由 Agent 生成、程序验证、用户可修改的规划流。正式工具执行接入后，人工节点按钮改成诊断/开发入口，普通用户不需要手工报告工具成功。
 
-## 8. 分阶段施工
+## 8. 开源参考与采用边界
+
+CYR.2B 参考以下开源项目的协议和交互思想，但不直接复制代码，也不把它们引入为运行时依赖：
+
+| 项目 | 许可证 | 借鉴内容 | 当前不直接采用的原因 |
+|---|---|---|---|
+| [LangGraph](https://github.com/langchain-ai/langgraph) | MIT | checkpoint、稳定 thread/run ID、interrupt、节点边界恢复、pending writes、幂等副作用 | 遐蝶已经有 SQLite、TaskRun、ToolRun、Memory 与 Context 所有权；引入会形成第二套状态与存储抽象 |
+| [Temporal Python SDK](https://github.com/temporalio/sdk-python) / [Temporal](https://github.com/temporalio/temporal) | MIT | 事件历史与 mutable state 一致性、Signal/Update/Query 分离、Update validator、取消与 heartbeat、恢复重放测试 | 需要额外服务与 worker，部署重量不适合当前本地桌面实验版 |
+| [Prefect](https://github.com/PrefectHQ/prefect) | Apache-2.0 | Flow/Task 状态词汇、带类型的人机输入、暂停/恢复状态、运行历史 UI | 面向数据工作流和部署编排，直接采用会扩大产品与依赖面 |
+| [LangGraph Agent Chat UI](https://github.com/langchain-ai/agent-chat-ui) | MIT | interrupt/approval 在聊天界面的展示、执行状态与消息流并置 | 当前主窗口已有稳定 React 信息架构，只参考交互，不替换前端 |
+| [Temporal UI](https://github.com/temporalio/ui) | MIT | 运行摘要、事件历史、失败详情、关联 ID 与重试入口 | 面向 Temporal 服务端对象，不能直接映射遐蝶的 Task/Memory/Tool 权限语义 |
+
+采用决策：
+
+- 借 LangGraph：每次恢复都以稳定 `task_run_id` 和 checkpoint 边界为准；中断前的副作用必须幂等。
+- 借 Temporal：命令先验证，再把事件与当前状态同事务提交；读查询不改变状态；取消是明确状态而不是成功的别名。
+- 借 Prefect：等待用户时显示需要什么输入、为什么等待、从哪里继续，而不是只显示“暂停”。
+- 借两类 UI：任务摘要与详细事件分层，普通用户看进度和下一动作，诊断页看 revision、trace、事件和安全错误。
+- 不引入外部 orchestrator、云服务或第二套 checkpoint 数据库；如果未来本地任务规模、并行 worker 或跨设备执行证明现有内核不足，再以 ADR 重新评估 Temporal/LangGraph 适配器。
+- 任何具体代码移植都必须单独做许可证、NOTICE 与来源审计；当前只采用通用架构思想。
+
+## 9. 分阶段施工
 
 ### CYR.2A：持久执行骨架（本轮已完成）
 
@@ -168,11 +189,12 @@ CYR.2A 在现有 Tasks 页面增加了最小执行卡片：
 - [x] 最小任务台状态与操作入口。
 - [x] 模块固定集与前端生产构建。
 
-### CYR.2B：计划编辑与并发合同
+### CYR.2B：计划编辑与并发合同（施工中）
 
 - [ ] 结构化多节点计划编辑器、依赖可视化和验收条件编辑。
-- [ ] `expected_revision` 乐观并发与明确冲突恢复。
-- [ ] TaskRun HTTP 合同固定集、非法转换矩阵与 SSE 状态更新。
+- [x] `expected_revision` 乐观并发、409 当前快照与前端刷新恢复。
+- [x] 冲突、无写入与幂等终态 HTTP/模块固定集。
+- [ ] 完整非法转换矩阵与 SSE 状态更新。
 - [ ] `awaiting_approval` 与未来 ConfirmationRequest 的边界适配。
 - [ ] 列出历史执行、失败原因与再次执行入口。
 
@@ -192,7 +214,7 @@ CYR.2A 在现有 Tasks 页面增加了最小执行卡片：
 - [ ] Windows 启动器与打包态恢复测试。
 - [ ] 多模型计划质量固定集；模型未验证仍可使用，不作为运行许可证。
 
-## 9. 验收门
+## 10. 验收门
 
 CYR.2 全阶段退出门：
 
@@ -206,6 +228,6 @@ CYR.2 全阶段退出门：
 - 日志与支持包固定集不泄露正文、提示词、密钥或隐藏推理。
 - 后端全量测试、前端测试、生产构建和启动器 smoke 全部通过。
 
-## 10. 后续衔接
+## 11. 后续衔接
 
 CYR.2B 是下一施工批次。它完成后再进入 CYR.3：建立 ToolRegistry、PermissionGuard、ConfirmationRequest 和正式 Artifact。ToolRun 已有权威状态机，CYR.3 的工具适配器必须复用它，并把 `task_run_id` 与当前节点绑定；任何插件或工具不得直接把节点写成成功。
