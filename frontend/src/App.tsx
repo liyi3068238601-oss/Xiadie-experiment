@@ -15,7 +15,7 @@ const NAV: { view: View; ico: IconName; label: string }[] = [
   { view: "tasks", ico: "task", label: "今日任务" },
   { view: "memories", ico: "memory", label: "记忆与关系" },
   { view: "files", ico: "folder", label: "文件与知识" },
-  { view: "tools", ico: "tool", label: "运行日志" },
+  { view: "tools", ico: "tool", label: "审计与诊断" },
   { view: "settings", ico: "settings", label: "设置" },
 ];
 

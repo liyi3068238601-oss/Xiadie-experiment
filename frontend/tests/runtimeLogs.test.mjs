@@ -4,6 +4,7 @@ import test from "node:test";
 
 const api = readFileSync(new URL("../src/api.ts", import.meta.url), "utf8");
 const page = readFileSync(new URL("../src/components/ToolLogsPage.tsx", import.meta.url), "utf8");
+const terminal = readFileSync(new URL("../src/components/DiagnosticTerminalPage.tsx", import.meta.url), "utf8");
 const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
 
 const CATEGORIES = ["model", "reasoning", "retrieval", "context", "tool", "system"];
@@ -49,7 +50,10 @@ test("runtime log disclosure states the allowed body and tracing boundaries", ()
   assert.match(page, /不展示系统提示词、隐藏思维链、密钥、知识正文或记忆正文/);
   assert.match(page, /不是逐 chunk 回放/);
   assert.match(page, /不能单独证明首 Token、展示节奏或取消瞬间行为/);
-  assert.match(app, /label: "运行日志"/);
+  assert.match(page, /<h1>运行审计<\/h1>/);
+  assert.match(terminal, /<h1>诊断终端<\/h1>/);
+  assert.match(terminal, /不是 Provider 隐藏思维链/);
+  assert.match(app, /label: "审计与诊断"/);
 });
 
 test("runtime log page retains filters and structured metadata fallback", () => {
@@ -57,4 +61,17 @@ test("runtime log page retains filters and structured metadata fallback", () => 
   assert.match(page, /搜索模型、错误码或理由/);
   assert.match(page, /Object\.entries\(item\.details\)/);
   assert.match(page, /setExpanded/);
+});
+
+test("diagnostic terminal streams structured logs and exposes readable failures", () => {
+  assert.match(api, /export interface DiagnosticLogEvent/);
+  assert.match(api, /streamDiagnosticLogs/);
+  assert.match(api, /\/api\/diagnostics\/logs\/stream/);
+  assert.match(terminal, /api\.streamDiagnosticLogs/);
+  assert.match(terminal, /item\.error\?\.type/);
+  assert.match(terminal, /item\.tool_run_id/);
+  assert.match(terminal, /character_mental_activity/);
+  assert.match(terminal, /💭/);
+  assert.match(terminal, /导出诊断包/);
+  assert.doesNotMatch(terminal, /dangerouslySetInnerHTML/);
 });

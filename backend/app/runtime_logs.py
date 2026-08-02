@@ -57,7 +57,8 @@ def list_feed(*, category: str | None = None, status: str | None = None,
         "total": len(window),
         "privacy_notice": (
             "本页会展示本地保存的对话输入和助手最终回复；不展示系统提示词、隐藏思维链、"
-            "密钥、知识正文、记忆正文或模型原始内部输出。删除原会话后，聊天详情不可恢复。"
+            "密钥、知识正文、记忆正文或模型原始内部输出。显式角色心理活动只在诊断终端"
+            "按独立协议展示。删除原会话后，聊天详情不可恢复。"
         ),
     }
 
@@ -316,14 +317,38 @@ def _context_events(conn, limit: int) -> list[dict[str, object]]:
 
 
 def _tool_events(conn, limit: int) -> list[dict[str, object]]:
-    rows = _rows(conn, "SELECT id,tool,risk_level,status,summary,created_at FROM tool_logs "
-                       "ORDER BY created_at DESC,id DESC LIMIT ?", limit)
-    return [_event(
+    modern = _optional_rows(
+        conn,
+        "SELECT id,trace_id,task_run_id,plugin_id,tool_name,tool_version,risk_level,status,phase,"
+        "attempt,duration_ms,error_code,error_type,error_message,created_at FROM tool_runs "
+        "ORDER BY created_at DESC,id DESC LIMIT ?",
+        limit,
+    )
+    events = [_event(
+        source="tool_run", event_id=row["id"], category="tool",
+        title=str(row.get("tool_name") or "工具调用"),
+        summary=(
+            f"{row.get('phase') or 'unknown'} · "
+            f"{row.get('error_type') or row.get('error_code') or row.get('status') or 'unknown'}"
+        ),
+        status=row.get("status"), created_at=row["created_at"], details={
+            "trace_id": row.get("trace_id"), "task_run_id": row.get("task_run_id"),
+            "plugin_id": row.get("plugin_id"), "tool_run_id": row["id"],
+            "tool_version": row.get("tool_version"), "risk_level": row.get("risk_level"),
+            "phase": row.get("phase"), "attempt": row.get("attempt"),
+            "duration_ms": row.get("duration_ms"), "error_code": row.get("error_code"),
+            "error_type": row.get("error_type"), "error_message": row.get("error_message"),
+        },
+    ) for row in modern]
+    legacy = _rows(conn, "SELECT id,tool,risk_level,status,summary,created_at FROM tool_logs "
+                         "ORDER BY created_at DESC,id DESC LIMIT ?", limit)
+    events.extend(_event(
         source="tool", event_id=row["id"], category="tool",
         title=str(row.get("tool") or "工具调用"), summary=str(row.get("summary") or ""),
         status=row.get("status"), created_at=row["created_at"],
-        details={"risk_level": row.get("risk_level"), "tool_run_id": row["id"]},
-    ) for row in rows]
+        details={"risk_level": row.get("risk_level"), "tool_run_id": row["id"], "legacy": True},
+    ) for row in legacy)
+    return events
 
 
 def _transition_events(conn, limit: int) -> list[dict[str, object]]:

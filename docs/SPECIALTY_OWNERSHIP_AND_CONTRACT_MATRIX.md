@@ -1,9 +1,9 @@
 # Xiadie 助手优先专项所有权与共享施工契约
 
-- 版本：v2.0
-- 日期：2026-08-01
-- 状态：助手优先所有权已冻结；LIFE 进入 RETIRE.0～RETIRE.5
-- 适用顺序：`RETIRE → Chat/Work → Task → ToolRegistry → Web/Research`
+- 版本：v2.1
+- 日期：2026-08-02
+- 状态：助手优先所有权已冻结；LIFE 已物理退役；LOG.0 已冻结
+- 适用顺序：`LOG → Chat/Work → Task → ToolRegistry → PluginHost → Web/Research`
 - 解释优先级：冻结协议与 ADR > 本矩阵 > 专项计划 > 阶段施工记录
 
 > v2.0 路线变更：LIFE 不再是现行所有者或 adapter 参与者。第 1 节中早期 ConstructionBaseline、Schema 64～71 和历史冻结记录继续作为审计证据，但不能据此新增 LIFE 依赖。冲突时以 `ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md` 为准。
@@ -25,9 +25,19 @@
 | SourceRef/Evidence/PWM | KIG | CTX/MEM/Task 消费 | 来源失效传播；派生层可重建 |
 | Task/TaskRun/Reminder | Task（RETIRE.2/CYR.2 建立） | EAP/KIG/CTX 只读或提议 | Task 状态机与用户删除 |
 | ToolRun/Artifact | ToolRegistry（CYR.3 建立） | Task/KIG/CTX 读取证据 | 工具审计与产物所有者管理 |
-| LIFE 全域 | 无；退役 | 只允许迁移器读取旧库 | RETIRE.4 备份后物理删除 |
+| OperationalLogEvent / TraceContext | Observability（LOG） | 所有模块通过受控 Logger 产生事件 | 按日志保留期轮转清理；不是业务真相 |
+| MentalActivityLog / 显式内心独白 | KFC/心理活动插件拥有内容；Observability 拥有展示与日志协议 | Persona/CIE/Feeling 提案；CTX 按预算只读 | 按会话有界裁剪、暂停与用户清除；不进入 MEM/PWM |
+| FeelingState | Feeling 插件私有命名空间 | Persona/CIE/CTX 只消费治理后的提案 | 时间/轮次衰减、插件清除或卸载数据选择 |
+| 运行审计聚合视图 | 各领域保有事实；Observability 只读聚合 | UI 查询 | 随领域事实生命周期；聚合视图可重建 |
+| DiagnosticTerminal / SupportBundle | Observability + Electron | 前端只读、用户主动导出 | 清屏只清视图；文件按保留期或用户删除 |
+| PluginManifest / PluginLifecycle | PluginHost（PLUG） | 插件声明；核心校验 | 停用/卸载与插件私有数据分开处理 |
+| 插件领域提案 | 对应核心领域 owner | 插件只能经 extension point 提议 | owner 拒绝或按领域规则删除 |
+| PresentationIntent / Adapter | Presentation Core；各 adapter 只消费 | Persona/CIE/Affect 可提议 | adapter 可独立移除；不删除核心任务事实 |
+| LIFE 全域 | 无；已退役 | 只允许迁移审计读取备份 | Schema 84 已备份后物理删除 |
 
 LIFE 的 LifeEvent、Schedule、Diary、ImportantDate、PersonalGoal、SelfTimeline 和 InnerStateProjection 不得转移给另一个系统继续模拟。只有用户确认的日期、约定、任务和项目事实可以按来源迁移。
+
+Observability 不拥有 TaskRun、ToolRun、PermissionGrant、模型调用、Memory 或 Knowledge 的业务状态，只拥有日志事件规范、TraceContext、sink、诊断查询和支持包。PluginHost 不拥有插件所提议的领域事实，也不能向插件转授核心 owner 没有批准的写权限。
 
 ## 1. 历史 ConstructionBaseline
 

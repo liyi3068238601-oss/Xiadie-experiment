@@ -4,7 +4,7 @@
 - 日期：2026-07-15
 - 决策者：项目所有者、Codex
 - 取代：ADR-0002 中的 CompanionState 状态定义
-- 关联计划：`docs/AFFECT_AND_RELATIONSHIP_SYSTEM_PLAN.md`
+- 关联计划：`docs/archive/legacy-routes/AFFECT_AND_RELATIONSHIP_SYSTEM_PLAN.md`
 
 ## 背景
 

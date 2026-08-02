@@ -3,8 +3,8 @@
 - 版本：v0.1 content writing
 - 日期：2026-07-29
 - 状态：全部 30 个 r1 正文条目、Glossary、来源分级、唯一所有者与预算已通过 Review；A 级补证继续按来源审计执行；未授权替换运行时 Lore
-- 上位计划：`docs/LIFE_V2_PERSONA_AND_SHORT_MEMORY_PLAN.md`
-- 来源审计：`docs/LIFE_V2_WORLDBOOK_SOURCE_AUDIT.md`
+- 上位计划：`docs/archive/legacy-routes/LIFE_V2_PERSONA_AND_SHORT_MEMORY_PLAN.md`
+- 来源审计：`docs/archive/legacy-routes/LIFE_V2_WORLDBOOK_SOURCE_AUDIT.md`
 
 ## 1. 编写规则
 

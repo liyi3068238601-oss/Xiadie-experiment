@@ -1,7 +1,7 @@
 # Xiadie Cyrene 风格助手路线长期规划
 
-- 版本：v1.0
-- 日期：2026-08-01
+- 版本：v1.1
+- 日期：2026-08-02
 - 状态：长期产品与工程路线
 - 适用仓库：`Xiadie-experiment`
 
@@ -76,7 +76,7 @@ Chat 和 Work 共享 Persona Core、记忆、事实、安全和权限。区别�
 
 ### 4.1 Interaction Layer
 
-- Live2D、主窗口、托盘和快捷入口。
+- PresentationAdapter、主窗口、托盘和快捷入口；Live2D 只作为实验期过渡 adapter。
 - CIE 消息积累、取消、图片和回复展示。
 - Chat/Work 模式与任务状态卡。
 
@@ -109,6 +109,14 @@ Chat 和 Work 共享 Persona Core、记忆、事实、安全和权限。区别�
 - RecoveryCheckpoint / RetryPolicy。
 - 未来受控 Worker Agent。
 
+### 4.5 Observability and Extension Layer
+
+- 运行审计：保存权限、执行、副作用、产物和结果等权威业务证据。
+- 诊断终端：实时展示进程、模块、trace、工具阶段和脱敏异常。
+- TraceContext：关联 Chat、TaskRun、ToolRun、模型调用、插件和产物。
+- PluginHost：Manifest、生命周期、hook、依赖、权限、隔离和兼容认证。
+- PresentationIntent：将 Agent Core 与 Live2D、React 或未来桌面壳解耦。
+
 ## 5. 能力路线
 
 ### CYR.0：LIFE 退役与产品收敛（已完成）
@@ -122,6 +130,23 @@ Chat 和 Work 共享 Persona Core、记忆、事实、安全和权限。区别�
 - [x] 主动系统取消 LIFE seed，只接受任务、提醒与真实交互来源。
 
 退出门：新安装不创建 LIFE 表；聊天、KIG 和主动系统不存在 LIFE 读取或写入。
+
+### LOG.0～LOG.5：可观测性与诊断底座
+
+目标：在 TaskRun、ToolRegistry 和插件扩展前，让每次失败都能被快速定位并安全追踪。
+
+- [x] LOG.0：冻结运行审计/诊断终端双界面、`operational-log-v1`、隐私边界与阶段计划。
+- [x] LOG.1：统一 Logger、模块颜色、人类终端与滚动 JSONL 实验基线。
+- [x] LOG.2：TraceContext、ToolRun v2、状态机与 Schema 85；未来 ToolRegistry 接入时必须复用该包装器。
+- [x] LOG.3：5,000 条/8 MiB 有界环形缓冲区、游标、gap 和诊断 SSE。
+- [x] LOG.4：前端诊断终端、过滤、搜索、异常详情和 trace/TaskRun/ToolRun 关联显示。
+- [x] LOG.5：Electron 启动链日志、10 MiB 轮转、14 天清理、导出和脱敏支持包实验基线。
+
+LOG.1～LOG.5 已可供实验版日常诊断使用。Windows 打包态只读目录、磁盘不足、慢客户端与 1,000 events/s 等故障注入仍是正式发布硬门，不把实验基线误写为发布认证完成。
+
+退出门：启动器环境中能直接识别失败进程、模块、工具、阶段、错误类型、脱敏消息与关联任务；日志故障不阻断业务；隐私固定集零泄露。
+
+权威施工规范见 `docs/OBSERVABILITY_AND_DIAGNOSTIC_LOGGING_PLAN.md`。
 
 ### CYR.1：Chat / Work 产品闭环
 
@@ -161,6 +186,57 @@ Chat 和 Work 共享 Persona Core、记忆、事实、安全和权限。区别�
 首批工具：工作区文件读取、受限写入、搜索、文本转换、文档解析和本地代码检查。
 
 退出门：工具结果不能由模型自报；无授权、目标变化或来源失效时 fail closed。
+
+### PLUG.0～PLUG.4：MoFox 风格插件宿主
+
+目标：形成可扩展但不能绕过核心治理的插件系统，让 Feeling、专业工具和第三方能力能够独立安装、停用、升级与诊断。
+
+#### PLUG.0：插件协议与最小宿主
+
+- `PluginManifest` 声明 ID、版本、入口、宿主兼容范围、能力、权限和配置 Schema。
+- `PluginContext` 只暴露受控 logger、事件订阅、配置、ToolRegistry 注册和最小服务句柄。
+- 插件通过显式 extension point 工作，不扫描或 monkey-patch 核心模块。
+- 生命周期固定为 discover、validate、load、start、stop、unload、upgrade、failed。
+
+退出门：示例插件可以安装、启用、禁用和卸载；无 Manifest 或版本不兼容时 fail closed。
+
+#### PLUG.1：Hook 与事件总线
+
+- 首批 hook 只覆盖聊天输入后的观察、上下文贡献提案、工具注册、任务事件和表现意图。
+- Hook 有优先级、超时、并发策略、输入/输出 Schema 和失败隔离。
+- 插件输出默认为 proposal，由核心 owner 验证后才可应用。
+- 插件不能读取或修改其他插件私有状态。
+
+退出门：插件超时、异常或返回非法结构不影响聊天、取消和权限主链；诊断终端能归因到插件与 hook。
+
+#### PLUG.2：权限、隔离与数据边界
+
+- 插件权限按网络域名、工作区、工具、模型、存储命名空间和数据类型声明。
+- 高风险能力仍走核心 PermissionGuard 和用户确认，插件不能自授予。
+- 插件私有存储使用独立命名空间和配额，不直接访问核心 SQLite 表。
+- 第一版至少提供进程内强校验；不可信插件进入独立进程/Worker 隔离后才允许扩展高风险能力。
+
+退出门：恶意测试不能越权读库、读文件、外发正文、伪造核心日志或扩大 ToolRun 权限。
+
+#### PLUG.3：管理界面与兼容治理
+
+- 插件页展示来源、版本、签名状态、权限、hook、故障、日志和数据占用。
+- 安装/升级前显示 Manifest diff 与新增权限；权限扩大必须重新确认。
+- 支持禁用、卸载、保留/删除插件数据、回滚兼容版本。
+- 建立宿主 API compatibility matrix 和认证固定集。
+
+退出门：普通用户可以看懂插件做什么、访问什么、为何失败并能安全停用；升级失败不破坏宿主启动。
+
+#### PLUG.4：Feeling 插件候选
+
+- 参考 MoFox feeling 的会话隔离、显式工具更新、时间衰减和轮次衰减边界，独立实现 Xiadie Feeling。
+- `set_feeling` 提交情绪、0～1 强度和短原因，状态按会话隔离并可以自然衰减。
+- 输出 `ContextContribution`、`PresentationIntent` 和 `mental-activity-log-v1` 提案，不写核心 Persona，不获得工具权限。
+- 心理活动流将显式 `thought`、预期反应、Feeling 和动作事件按时间线记录，并可用 `💭` 在诊断终端显示。
+- 默认每个会话有界保留、允许暂停记录和单独清除；临时聊天只在内存保存。
+- 不恢复 LIFE 离线世界、关系压力或未授权主动动机，也不读取 Provider 隐藏 reasoning。
+
+退出门：关闭插件后聊天、记忆和任务主链完全可用；状态衰减和清除可验证；用户可见角色活动能追踪来源，Provider 隐藏推理不落盘。
 
 ### CYR.4：Web / Research Agent
 
@@ -233,18 +309,23 @@ Chat 和 Work 共享 Persona Core、记忆、事实、安全和权限。区别�
 - 用户数据导出和隐私删除。
 - 插件/连接器签名、权限清单和版本治理。
 - 发布资源和角色资产许可证审计。
+- 完成非 Live2D 入口验收后移除 Live2D renderer、IPC、设置和受限资产链。
 
 ## 6. 近期施工顺序
 
 ```text
 RETIRE.0～RETIRE.3 已完成
+  → LOG.0 已完成
+  → LOG.1～LOG.5 Observability/Diagnostic
   → CYR.1 Chat/Work
   → CYR.2 TaskRun
   → CYR.3 ToolRegistry/Permission/Artifact
+  → PLUG.0～PLUG.4 PluginHost/Feeling candidate
   → CYR.4 Web/Research
 ```
 
 在 CYR.3 完成前，不扩大到任意 Shell、任意文件系统、桌面输入控制或外部消息发送。
+PluginHost 可在 CYR.3 后建立最小宿主，但高风险第三方插件必须等待权限、隔离和认证硬门完成。
 
 ## 7. 评测体系
 
@@ -280,7 +361,7 @@ RETIRE.0～RETIRE.3 已完成
 ## 8. 明确不做
 
 - 不复活 LIFE 或换名继续模拟离线人生。
-- 不保存 chain-of-thought 或自由内心独白。
+- 不保存 Provider 隐藏 chain-of-thought、reasoning token 或系统内部推理草稿；显式生成并向用户公开的角色内心独白按 `mental-activity-log-v1` 治理。
 - 不让关系、心情或角色设定扩大工具权限。
 - 不在 ToolRegistry 和权限底座前接入任意桌面自动化。
 - 不把多模型路由称为多 Agent。

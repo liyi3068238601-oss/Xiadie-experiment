@@ -967,6 +967,55 @@ export interface RuntimeLogTurnDetail {
   inputs: RuntimeLogTurnInput[];
   representation: "persisted-turn-final-v1";
 }
+export type DiagnosticLevel = "TRACE" | "DEBUG" | "INFO" | "WARNING" | "ERROR" | "CRITICAL";
+export interface DiagnosticLogEvent {
+  schema: "operational-log-v1";
+  event_id: string;
+  cursor: number;
+  timestamp: string;
+  epoch: number;
+  level: DiagnosticLevel;
+  logger: string;
+  event: string;
+  message: string;
+  process: "backend" | "desktop" | "plugin" | string;
+  pid?: number;
+  thread?: string;
+  trace_id?: string;
+  span_id?: string;
+  request_id?: string;
+  session_id?: string;
+  task_run_id?: string;
+  tool_run_id?: string;
+  plugin_id?: string;
+  phase?: string;
+  status?: string | number;
+  duration_ms?: number;
+  content_class?: "character_mental_activity" | string;
+  visibility?: "user_visible" | string;
+  thought?: string;
+  mood?: string;
+  intensity?: number | null;
+  reason?: string;
+  expected_reaction?: string;
+  error?: { code?: string; type?: string; message?: string; retryable?: boolean; stack?: string };
+  [key: string]: unknown;
+}
+export interface DiagnosticLogSnapshot {
+  items: DiagnosticLogEvent[];
+  oldest_cursor: number;
+  latest_cursor: number;
+  gap: boolean;
+  dropped: number;
+  capacity: number;
+  privacy_notice: string;
+}
+export interface SupportBundleResult {
+  bundle_id: string;
+  filename: string;
+  size: number;
+  download_url: string;
+}
 
 // ---- 会话 ----
 export const listSessions = () => j<Session[]>("/api/sessions");
@@ -1458,6 +1507,83 @@ export const listRuntimeLogs = (options: {
 };
 export const getRuntimeLogDetail = (eventId: string) =>
   j<RuntimeLogTurnDetail>(`/api/runtime-logs/${encodeURIComponent(eventId)}`);
+export const listDiagnosticLogs = (options: {
+  after?: number;
+  limit?: number;
+  level?: DiagnosticLevel | "";
+  process?: string;
+  logger?: string;
+  search?: string;
+  content_class?: string;
+} = {}) => {
+  const query = new URLSearchParams();
+  query.set("after", String(options.after ?? 0));
+  query.set("limit", String(options.limit ?? 1000));
+  if (options.level) query.set("level", options.level);
+  if (options.process) query.set("process", options.process);
+  if (options.logger) query.set("logger", options.logger);
+  if (options.search) query.set("search", options.search);
+  if (options.content_class) query.set("content_class", options.content_class);
+  return j<DiagnosticLogSnapshot>(`/api/diagnostics/logs?${query.toString()}`);
+};
+export const createSupportBundle = () => j<SupportBundleResult>("/api/diagnostics/export", {
+  method: "POST", body: "{}",
+});
+export async function downloadSupportBundle(bundle: SupportBundleResult): Promise<void> {
+  const response = await fetch(API_BASE + bundle.download_url, { headers: requestHeaders() });
+  if (!response.ok) throw new ApiError(response.status, "诊断包下载失败");
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = bundle.filename;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export async function streamDiagnosticLogs(
+  after: number,
+  signal: AbortSignal,
+  callbacks: {
+    onLog: (event: DiagnosticLogEvent) => void;
+    onGap?: (oldestCursor: number) => void;
+    onConnected?: () => void;
+  },
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE}/api/diagnostics/logs/stream?after=${Math.max(0, after)}`,
+    { headers: requestHeaders(), signal },
+  );
+  if (!response.ok || !response.body) throw new ApiError(response.status, "诊断流连接失败");
+  callbacks.onConnected?.();
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (!signal.aborted) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+    let boundary = buffer.indexOf("\n\n");
+    while (boundary >= 0) {
+      const frame = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      const lines = frame.split("\n");
+      const eventName = lines.find((line) => line.startsWith("event:"))?.slice(6).trim() || "message";
+      const data = lines.filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trimStart()).join("\n");
+      if (data) {
+        try {
+          const parsed = JSON.parse(data);
+          if (eventName === "log") callbacks.onLog(parsed as DiagnosticLogEvent);
+          if (eventName === "gap") callbacks.onGap?.(Number(parsed.oldest_cursor || 0));
+        } catch {
+          // A malformed diagnostic frame is ignored; the next valid frame remains usable.
+        }
+      }
+      boundary = buffer.indexOf("\n\n");
+    }
+  }
+}
 
 // ---- 聊天（SSE 流式）----
 export interface ChatCallbacks {

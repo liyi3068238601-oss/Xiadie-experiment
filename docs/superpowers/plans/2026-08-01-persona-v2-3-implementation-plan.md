@@ -101,7 +101,7 @@ v2.3 不得原地销毁 v2.2。实施采用最小版本路由扩展，而不是�
 - `backend/tests/test_life2_4_short_memo.py`
 - `backend/tests/test_life2_7_short_memo_active.py`（新增，若既有测试不适合承载发布合同）
 - `docs/reports/life2-7-short-memo-active.md`（新增）
-- `docs/LIFE_V2_PERSONA_AND_SHORT_MEMORY_PLAN.md`（只追加后续施工记录）
+- `docs/archive/legacy-routes/LIFE_V2_PERSONA_AND_SHORT_MEMORY_PLAN.md`（只追加后续施工记录）
 
 ### 6.3 施工任务
 

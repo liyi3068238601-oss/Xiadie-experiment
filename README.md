@@ -1,10 +1,10 @@
 # 遐蝶 · 助手优先 Windows 桌面 Agent（实验版）
 
-Xiadie Experiment 保留“遐蝶”的稳定身份、人格、自然表达和 Live2D 桌面入口，将主要职责收敛为现代通用 Agent：自然聊天、检索、分析、写作、编程、任务管理和受控工具执行。
+Xiadie Experiment 保留“遐蝶”的稳定身份、人格和自然表达，现阶段继续使用 Live2D 桌面入口，将主要职责收敛为现代通用 Agent：自然聊天、检索、分析、写作、编程、任务管理和受控工具执行。Live2D 是实验期过渡表现层，后期将在替代入口稳定后移除。
 
 本仓库不再发展角色离线生活模拟。原 LIFE 生活连续性系统已完成物理退役：运行时代码、UI、API、worker、adapter 和专属数据库表已经移除，同时保留用户记忆、知识、会话连续性、任务事实和角色人格。
 
-> 当前状态：RETIRE.0～RETIRE.3 已实施，Schema 84 已完成备份、用户事实迁移和 LIFE 表清理；下一阶段进入现代 Agent 能力建设与完整发布回归。
+> 当前状态（2026-08-02）：RETIRE.0～RETIRE.3 已实施；Schema 85 在 LIFE 退役后的 Schema 84 基线上加入 ToolRun v2 与有界心理活动日志。LOG.1～LOG.5 实验基线已投入使用：业务“运行审计”和实时“诊断终端”并存，后端/Electron 结构化日志、TraceContext、滚动 JSONL、诊断 SSE、ToolRun v2、显式心理活动显示与脱敏支持包均已接通。未来真实 ToolRegistry 必须通过 ToolRun v2 包装器执行；打包态故障注入与高负载硬化仍属于后续发布门禁。
 
 ## 产品方向
 
@@ -64,7 +64,7 @@ CDS 提供所有领域共享的安全决策运行时：
 - 模型路由、隐私门、超时、重试、熔断和预算。
 - DecisionRun、事件、反馈、校准和无正文诊断。
 
-LIFE 专属日程、日记和生活事件 decision kind 将在 RETIRE.1 删除；CDS 通用核心保留，并转向 Task、Tool 和 Research 决策。
+LIFE 专属日程、日记和生活事件 decision kind 已随 RETIRE.1 删除；CDS 通用核心保留，并转向 Task、Tool 和 Research 决策。
 
 ### KIG / PWM 知识治理
 
@@ -75,7 +75,20 @@ LIFE 专属日程、日记和生活事件 decision kind 将在 RETIRE.1 删除�
 - 用户、项目、文档和工具事实构成的 Personal World Model。
 - 实体消歧、合并、拆分和非破坏性维护。
 
-旧 `life` 检索源与 LIFE adapter 将被删除。PWM 不得保存模拟心境、虚构日程或遐蝶离线活动。
+旧 `life` 检索源与 LIFE adapter 已删除。PWM 不得保存模拟心境、虚构日程或遐蝶离线活动。
+
+### 可观测性与诊断
+
+现有“运行日志”是从业务表聚合出的只读审计时间线，适合回顾模型、决策、检索和上下文事件，但不是完整进程终端。LOG 路线将把它明确命名为“运行审计”，并新增独立“诊断终端”：
+
+- 统一结构化 Logger、稳定模块名、级别、颜色和异常因果链。
+- 通过 `trace_id` 关联请求、TaskRun、ToolRun、模型调用、插件和产物。
+- 彩色本地终端 + 有界滚动 JSONL + 内存环形缓冲 + SSE 实时视图。
+- 错误行直接显示工具、阶段、错误类型、脱敏消息和关联任务。
+- 支持以 `💭` 显示插件或 Agent 显式生成、声明为用户可见的心理活动、内心独白摘要与 Feeling 状态。
+- 不记录密钥、完整提示词、聊天/文件正文、记忆正文或 Provider 隐藏推理；显式角色活动使用独立协议、长度上限、会话隔离和清除规则。
+
+详细协议、分阶段施工与验收见 [可观测性与诊断日志施工计划](docs/OBSERVABILITY_AND_DIAGNOSTIC_LOGGING_PLAN.md)。
 
 ### 主动帮助
 
@@ -126,7 +139,7 @@ LIFE 专属日程、日记和生活事件 decision kind 将在 RETIRE.1 删除�
 ## 架构
 
 ```text
-Electron / Live2D
+Electron / PresentationAdapter（Live2D 过渡期）
         │
         ▼
 React + TypeScript 主窗口
@@ -141,7 +154,8 @@ FastAPI Agent Core
         ├─ CDS 结构化认知决策
         ├─ KIG / PWM 来源、证据与世界模型
         ├─ EAP 任务驱动主动帮助
-        └─ Task / ToolRegistry / Permission / Artifact（下一阶段）
+        ├─ Observability / Trace / Audit / Diagnostic（LOG 路线）
+        └─ Task / ToolRegistry / Permission / Artifact（后续阶段）
 ```
 
 设计原则：
@@ -167,6 +181,7 @@ FastAPI Agent Core
 | EAP | Presence、候选、授权、投递、反馈 | 改为任务和提醒驱动 |
 | Affect | 当轮用户状态与表达指导 | 不再跨轮模拟遐蝶心境 |
 | ShortMemo | 近期任务和上下文 | 迁入 Task/CTX/MEM |
+| Observability | 结构化日志、Trace、诊断终端、支持包 | LOG.1～LOG.5 实验基线可用；LOG.6 随插件宿主施工 |
 | LIFE | 离线世界、日程、日记、自我时间线 | 退役并物理删除 |
 
 ## 安全与隐私
@@ -178,7 +193,7 @@ FastAPI Agent Core
 - 本地文件不会因为“本地可检索”而自动获得远传权限。
 - 图片发往远端前必须绑定 Provider、模型、位置版本和本轮授权。
 - Knowledge、Memory、History、Task、Tool 结果始终以低权限资料进入模型上下文。
-- 不保存或展示 chain-of-thought、自由文本内心独白和隐藏推理。
+- 不保存或展示 Provider 隐藏 chain-of-thought、reasoning token 和系统内部推理草稿；允许保存并展示通过受控字段显式生成、明确标记为 AI 角色表达的心理活动与内心独白。
 - 不编造工具执行、文件修改、实时信息或现实身体活动。
 
 ## 仓库结构
@@ -248,6 +263,8 @@ npm.cmd test
 npm.cmd run build
 ```
 
+2026-08-02 最新门禁：后端 `2505 passed`；前端 `80 passed`；Vite 生产构建、Electron 两个入口脚本语法检查、Python `compileall` 和真实本机鉴权 HTTP 诊断冒烟均通过。现存提示仅为 Starlette/httpx 弃用提醒、测试缓存目录权限提醒，以及 Live2D Classic 脚本的既有 Vite 打包提示。
+
 退役施工必须额外验证：
 
 - 普通聊天不读取或写入 LIFE 表。
@@ -261,7 +278,8 @@ npm.cmd run build
 
 | 文档 | 用途 |
 |---|---|
-| [助手优先架构与 LIFE 退役迁移计划](docs/ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md) | 当前最高优先级产品与迁移规范 |
+| [助手优先架构与 LIFE 退役迁移计划](docs/ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md) | 助手优先产品与退役迁移规范 |
+| [可观测性与诊断日志施工计划](docs/OBSERVABILITY_AND_DIAGNOSTIC_LOGGING_PLAN.md) | Logger、Trace、ToolRun、诊断终端与支持包施工规范 |
 | [Cyrene 风格实验计划](docs/CYRENE_STYLE_AGENT_EXPERIMENT_PLAN.md) | 实验路线与 Chat/Work 目标 |
 | [Cyrene 风格助手长期规划](docs/CYRENE_STYLE_AGENT_LONG_TERM_ROADMAP.md) | Task、Tool、Research、MCP 与 Worker 长期路线 |
 | [项目上下文](docs/CODEX_PROJECT_CONTEXT.md) | 开发与治理约束 |
@@ -271,8 +289,9 @@ npm.cmd run build
 | [上下文系统](docs/CONVERSATION_CONTEXT_AND_SUMMARY_PLAN.md) | CTX 预算、摘要和历史 |
 | [知识治理与 PWM](docs/XIADIE_KNOWLEDGE_INTELLIGENCE_GOVERNANCE_AND_WORLD_MODEL_PLAN.md) | KIG/PWM 设计 |
 | [KFC/CIE 交互增强](docs/KFC_COMPANION_INTERACTION_ENHANCEMENT_PLAN.md) | 聊天交互、取消、图片和贡献接口 |
+| [退役路线文档归档](docs/archive/legacy-routes/README.md) | LIFE、LIFE v2 与旧生活化 Affect/EAP 历史路线 |
 
-历史 LIFE、旧 Affect/EAP 和 LIFE v2 文档仍保留施工证据，但其中与现行规范冲突的产品结论已经失效。
+历史 LIFE、旧 Affect/EAP、早期 jiwen 融合和 LIFE v2 路线文档已集中到 `docs/archive/legacy-routes/`。历史 ADR 与阶段报告继续按原编号保留审计证据；其中与现行规范冲突的产品结论已经失效。
 
 ## 路线图
 
@@ -280,10 +299,13 @@ npm.cmd run build
 2. `[x]` RETIRE.1：删除 LIFE 运行时、API、UI、adapter 和双 Profile。
 3. `[x]` RETIRE.2：迁移用户日期、约定、任务和 ShortMemo 设置。
 4. `[x]` RETIRE.3：Schema 84 备份并删除 LIFE 专属表。
-5. `[ ]` RETIRE.4/CYR.1：Chat/Work 与 TaskRun 产品基线。
-6. `[ ]` CYR.2～CYR.3：ToolRegistry、权限、产物和恢复。
-7. `[ ]` Web/Research、文件与代码工具、MCP 接入。
-8. `[ ]` Chat/Work 对照评测和产品冻结。
+5. `[x]` LOG.0：可观测性、诊断日志、隐私和 ToolRun v2 协议冻结。
+6. `[x]` LOG.1～LOG.5 实验基线：统一 Logger、TraceContext、实时诊断终端、Electron 日志和支持包；发布级故障注入与负载硬化继续保留为门禁。
+7. `[ ]` CYR.1～CYR.3：Chat/Work、TaskRun、ToolRegistry、权限、产物和恢复。
+8. `[ ]` PLUG.0～PLUG.4：MoFox 风格插件宿主、Manifest、生命周期、权限和隔离；Feeling 作为插件候选。
+9. `[ ]` Web/Research、文件与代码工具、MCP 接入。
+10. `[ ]` PresentationAdapter 解耦并在替代入口稳定后移除 Live2D。
+11. `[ ]` Chat/Work 对照评测和产品冻结。
 
 ## 许可证
 

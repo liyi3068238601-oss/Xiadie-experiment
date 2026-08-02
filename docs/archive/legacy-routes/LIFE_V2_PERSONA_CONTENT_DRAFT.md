@@ -3,8 +3,8 @@
 - 版本：v0.2 content writing
 - 日期：2026-07-29
 - 原始素材：`E:\Xiadie\人格.txt`
-- 状态：4.1～4.4 与 5.1～5.3、负面行为矩阵已确认冻结；WorldBook 正文转入 `docs/LIFE_V2_WORLDBOOK_CONTENT_DRAFT.md` 逐批撰写；未授权写入运行时 Persona
-- 上位计划：`docs/LIFE_V2_PERSONA_AND_SHORT_MEMORY_PLAN.md`
+- 状态：4.1～4.4 与 5.1～5.3、负面行为矩阵已确认冻结；WorldBook 正文转入 `docs/archive/legacy-routes/LIFE_V2_WORLDBOOK_CONTENT_DRAFT.md` 逐批撰写；未授权写入运行时 Persona
+- 上位计划：`docs/archive/legacy-routes/LIFE_V2_PERSONA_AND_SHORT_MEMORY_PLAN.md`
 
 ## 1. 素材审计
 
@@ -355,6 +355,6 @@
 6. 现实、能力与资料边界：已确认冻结。
 7. 有限风格偏好：已确认冻结。
 8. 负面行为矩阵：已确认冻结。
-9. WorldBook 内容：转入 `docs/LIFE_V2_WORLDBOOK_CONTENT_DRAFT.md`，第一批 `self/daily_life` 等待用户 Review。
+9. WorldBook 内容：转入 `docs/archive/legacy-routes/LIFE_V2_WORLDBOOK_CONTENT_DRAFT.md`，第一批 `self/daily_life` 等待用户 Review。
 
 每段确认后再压缩为正式 Prompt 文本，并记录其字符/token 预算；完整 Core 必须在当前约 1490-token 基线以内，目标仍为约 1200 tokens 或更低。

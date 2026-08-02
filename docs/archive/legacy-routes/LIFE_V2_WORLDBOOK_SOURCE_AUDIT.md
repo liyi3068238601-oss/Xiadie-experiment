@@ -4,7 +4,7 @@
 - 日期：2026-07-29
 - 状态：只登记来源与缺口，不是 canonical 正文，不授权运行时施工
 - 本地素材：`E:\Xiadie\人格.txt`、`E:\Cyrene agent\设定`
-- 上位计划：`docs/LIFE_V2_PERSONA_AND_SHORT_MEMORY_PLAN.md`
+- 上位计划：`docs/archive/legacy-routes/LIFE_V2_PERSONA_AND_SHORT_MEMORY_PLAN.md`
 
 ## 1. 来源等级
 
