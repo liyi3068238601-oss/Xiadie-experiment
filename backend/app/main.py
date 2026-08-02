@@ -567,6 +567,7 @@ class ChatIn(BaseModel):
     image_location_revision: Optional[int] = Field(default=None, ge=1)
     persona_mode: Optional[str] = Field(
         default=None, pattern=r"^(companionship|focused_work)$",
+        description="Deprecated compatibility input; CYR.1 always uses adaptive behavior.",
     )
     persona_style: dict[str, str] = Field(default_factory=dict)
 
@@ -952,6 +953,17 @@ async def chat(body: ChatIn) -> StreamingResponse:
                 provider=provider,
                 model=model,
             )
+            if persona_compilation.fallback_reason:
+                log_event(
+                    "persona.compiler", "WARNING", "persona_profile_fallback",
+                    "Persona profile fallback selected",
+                    fields={
+                        "requested_profile": persona_compilation.requested_profile,
+                        "selected_profile": persona_compilation.selected_profile,
+                        "fallback_reason": persona_compilation.fallback_reason,
+                        "behavior_policy": persona_compilation.behavior_policy,
+                    },
+                )
         except persona_v2.PersonaResourceError as exc:
             raise HTTPException(422, str(exc)) from exc
         legacy_lore_digest = lore.retrieve_lore(effective_content)
@@ -1375,8 +1387,6 @@ async def chat(body: ChatIn) -> StreamingResponse:
                 },
             )
             stream_options = {"max_tokens": context_package.output_reserve_tokens}
-            if persona_compilation.selected_v2:
-                stream_options["temperature"] = 0.0
             async for chunk in llm.stream_chat(provider, model, messages, **stream_options):
                 if body.cancel_token and chat_request_control.is_cancelled(body.cancel_token):
                     _finish_knowledge_retrieval(knowledge_retrieval, status="failed")

@@ -1,5 +1,7 @@
 # Persona v2.3 现代 AI 陪伴助手与 LIFE Active 设计
 
+> **历史设计，已被取代。** 本文关于模型认证后才能启用 v2.3、Chat/Work 分层和 LIFE Active 的结论已经失效。现行规范见 [`../../CYR1_SINGLE_AGENT_PERSONA_V23_PLAN.md`](../../CYR1_SINGLE_AGENT_PERSONA_V23_PLAN.md)；本文仅保留为设计演变证据。
+
 - 日期：2026-08-01
 - 状态：设计已确认，等待书面复核后进入实施计划
 - 目标版本：`persona-profile-v2.3`

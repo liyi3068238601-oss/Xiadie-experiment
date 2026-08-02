@@ -1,5 +1,7 @@
 # Persona v2.3 与 LIFE Active 正式实施计划
 
+> **历史计划，已失效。** LIFE 已物理退役，本文中的 LIFE Active、Chat/Work 模式与 LIFE2.9 施工顺序不得继续执行。现行 CYR.1 规范见 [`../../CYR1_SINGLE_AGENT_PERSONA_V23_PLAN.md`](../../CYR1_SINGLE_AGENT_PERSONA_V23_PLAN.md)；本文仅保留为决策审计证据。
+
 - 日期：2026-08-01
 - 版本：v0.1 review candidate
 - 状态：待用户 Review；未授权运行时代码施工

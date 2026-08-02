@@ -4,14 +4,16 @@ Xiadie Experiment 保留“遐蝶”的稳定身份、人格和自然表达，�
 
 本仓库不再发展角色离线生活模拟。原 LIFE 生活连续性系统已完成物理退役：运行时代码、UI、API、worker、adapter 和专属数据库表已经移除，同时保留用户记忆、知识、会话连续性、任务事实和角色人格。
 
-> 当前状态（2026-08-02）：RETIRE.0～RETIRE.3 已实施；Schema 85 在 LIFE 退役后的 Schema 84 基线上加入 ToolRun v2 与有界心理活动日志。LOG.1～LOG.5 实验基线已投入使用：业务“运行审计”和实时“诊断终端”并存，后端/Electron 结构化日志、TraceContext、滚动 JSONL、诊断 SSE、ToolRun v2、显式心理活动显示与脱敏支持包均已接通。未来真实 ToolRegistry 必须通过 ToolRun v2 包装器执行；打包态故障注入与高负载硬化仍属于后续发布门禁。
+> 当前状态（2026-08-02）：RETIRE.0～RETIRE.3 与 LOG.1～LOG.5 实验基线已投入使用。CYR.1 已完成：单 Agent Persona v2.3 已接入，用户始终面对同一个遐蝶，不需要切换 Chat/Work；Persona 负责身份、判断与语气，WorldBook 只作为按需召回的遐蝶特殊知识库，Memory 只记录真实互动。现有 v2.2 仅作为迁移期运行回退，WorldBook 内容本阶段未改动。
+
+Persona v2.3 只依赖资源完整性和模型基本兼容能力，不依赖逐模型“认证”才能运行。模型固定集结果仅显示为已验证/未验证并用于发布质量管理；更换模型、Provider 或接口地址不会让 Persona 回退，也不会由 Persona 强制采样参数。
 
 ## 产品方向
 
 遐蝶始终以同一人格与用户交流，但角色感不应妨碍完成任务。
 
-- Chat：自然、克制、有连续性，适度追问和主动帮助。
-- Work：结论优先、可验证、能持续执行并交付产物。
+- 自然交流：自然、克制、有连续性，适度追问和主动帮助。
+- 任务处理：结论优先、可验证，能持续执行并交付产物。
 - Persona：保持遐蝶身份、价值判断、说话方式和事实诚实边界。
 - Agent：计划、工具、权限、任务状态、恢复和审计由产品架构负责。
 - Lore：按需召回的角色知识，不是现代知识白名单。
@@ -22,7 +24,7 @@ Xiadie Experiment 保留“遐蝶”的稳定身份、人格和自然表达，�
 ### 对话与交互
 
 - FastAPI + SSE 流式聊天。
-- `companionship` / `focused_work` 两种表达模式，共享同一 Persona Core。
+- 单一 Persona v2.3 根据当前请求自然调整表达；旧 `companionship` / `focused_work` 仅作为后端兼容输入。
 - 消息积累窗口、活动生成取消、重新生成旧回复保护。
 - 图片能力探测、大小限制、临时存储和远端逐轮授权。
 - 客户端回复节奏与治理后的第三方 ContextContribution。
@@ -263,7 +265,7 @@ npm.cmd test
 npm.cmd run build
 ```
 
-2026-08-02 最新门禁：后端 `2505 passed`；前端 `80 passed`；Vite 生产构建、Electron 两个入口脚本语法检查、Python `compileall` 和真实本机鉴权 HTTP 诊断冒烟均通过。现存提示仅为 Starlette/httpx 弃用提醒、测试缓存目录权限提醒，以及 Live2D Classic 脚本的既有 Vite 打包提示。
+2026-08-02 最新门禁：后端 `2510 passed`；CYR.1 相关后端 `91 passed`；前端 `80 passed`；Vite 生产构建与 Python `compileall` 通过。现存提示仅为 Starlette/httpx 弃用提醒、测试缓存目录权限提醒，以及 Live2D Classic 脚本的既有 Vite 打包提示。上一 LOG 检查点的 Electron 入口脚本与真实本机鉴权 HTTP 诊断冒烟继续有效，本轮未修改对应链路。
 
 退役施工必须额外验证：
 
@@ -280,7 +282,8 @@ npm.cmd run build
 |---|---|
 | [助手优先架构与 LIFE 退役迁移计划](docs/ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md) | 助手优先产品与退役迁移规范 |
 | [可观测性与诊断日志施工计划](docs/OBSERVABILITY_AND_DIAGNOSTIC_LOGGING_PLAN.md) | Logger、Trace、ToolRun、诊断终端与支持包施工规范 |
-| [Cyrene 风格实验计划](docs/CYRENE_STYLE_AGENT_EXPERIMENT_PLAN.md) | 实验路线与 Chat/Work 目标 |
+| [CYR.1 单 Agent 与 Persona v2.3 施工计划](docs/CYR1_SINGLE_AGENT_PERSONA_V23_PLAN.md) | 单一遐蝶 Agent、自动表达策略、Persona 版本回退与 WorldBook 边界 |
+| [Cyrene 风格实验计划](docs/CYRENE_STYLE_AGENT_EXPERIMENT_PLAN.md) | 单 Agent 行为质量与能力分层实验路线 |
 | [Cyrene 风格助手长期规划](docs/CYRENE_STYLE_AGENT_LONG_TERM_ROADMAP.md) | Task、Tool、Research、MCP 与 Worker 长期路线 |
 | [项目上下文](docs/CODEX_PROJECT_CONTEXT.md) | 开发与治理约束 |
 | [专项所有权矩阵](docs/SPECIALTY_OWNERSHIP_AND_CONTRACT_MATRIX.md) | 各领域唯一写入者和接口 |
@@ -293,6 +296,8 @@ npm.cmd run build
 
 历史 LIFE、旧 Affect/EAP、早期 jiwen 融合和 LIFE v2 路线文档已集中到 `docs/archive/legacy-routes/`。历史 ADR 与阶段报告继续按原编号保留审计证据；其中与现行规范冲突的产品结论已经失效。
 
+长期路线末尾维护统一的“临时兼容与退场台账”，覆盖 Persona v2.2、旧记忆候选/兼容 API、ShortMemo、旧摘要字段、内建 Affect/Relationship、旧 Lore 桥、主动陪伴适配、日志协议与 Live2D。它们只能在数据迁移、真实使用、兼容窗口、诊断和回滚门槛全部满足后删除；保留用户真实记忆不等于永久保留旧记忆实现。
+
 ## 路线图
 
 1. `[x]` RETIRE.0：文档、所有权和迁移边界冻结。
@@ -301,11 +306,11 @@ npm.cmd run build
 4. `[x]` RETIRE.3：Schema 84 备份并删除 LIFE 专属表。
 5. `[x]` LOG.0：可观测性、诊断日志、隐私和 ToolRun v2 协议冻结。
 6. `[x]` LOG.1～LOG.5 实验基线：统一 Logger、TraceContext、实时诊断终端、Electron 日志和支持包；发布级故障注入与负载硬化继续保留为门禁。
-7. `[ ]` CYR.1～CYR.3：Chat/Work、TaskRun、ToolRegistry、权限、产物和恢复。
+7. `[-]` CYR.1～CYR.3：单 Agent Persona v2.3、TaskRun、ToolRegistry、权限、产物和恢复；CYR.1 已完成。
 8. `[ ]` PLUG.0～PLUG.4：MoFox 风格插件宿主、Manifest、生命周期、权限和隔离；Feeling 作为插件候选。
 9. `[ ]` Web/Research、文件与代码工具、MCP 接入。
 10. `[ ]` PresentationAdapter 解耦并在替代入口稳定后移除 Live2D。
-11. `[ ]` Chat/Work 对照评测和产品冻结。
+11. `[ ]` 单 Agent 多场景行为评测和产品冻结。
 
 ## 许可证
 

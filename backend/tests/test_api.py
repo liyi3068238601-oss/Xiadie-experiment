@@ -22,6 +22,8 @@ def test_health():
 def test_selected_persona_v2_filters_action_narration_from_stream_and_storage(monkeypatch):
     from app import llm, persona_v2
 
+    stream_options = {}
+
     compilation = persona_v2.PersonaCompilation(
         prompt="certified persona", candidate_prompt="certified persona",
         profile_version="persona-profile-v2.2", compiler_version="persona-prompt-compiler-v1",
@@ -32,6 +34,7 @@ def test_selected_persona_v2_filters_action_narration_from_stream_and_storage(mo
     monkeypatch.setattr(persona_v2, "compile_for_request", lambda **_kwargs: compilation)
 
     async def fake_stream(*_args, **_kwargs):
+        stream_options.update(_kwargs)
         yield "（微微"
         yield "一怔，声音放轻）我在听。HTTP（超文本"
         yield "传输协议）仍可正常说明。"
@@ -44,6 +47,7 @@ def test_selected_persona_v2_filters_action_narration_from_stream_and_storage(mo
     ) as response:
         body = "".join(response.iter_text())
     assert response.status_code == 200
+    assert "temperature" not in stream_options
     assert "微微一怔" not in body and "声音放轻" not in body
     assert "HTTP（超文本传输协议）仍可正常说明。" in body
     messages = client.get(f"/api/sessions/{session['id']}/messages").json()
