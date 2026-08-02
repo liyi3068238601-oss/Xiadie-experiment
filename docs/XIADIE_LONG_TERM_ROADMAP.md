@@ -595,7 +595,7 @@ Artifact
 
 ## 14A. v0.4.2：记忆星座与交互边界
 
-本阶段融合 [jiwen](https://github.com/ClaraShafiq/jiwen) 的连续状态思路与 [MemoryConstellations](https://github.com/ClaraShafiq/MemoryConstellations) 的分层记忆组织。详细边界与交付顺序见 `docs/JIWEN_MEMORY_CONSTELLATIONS_INTEGRATION.md` 和 ADR-0002。
+本阶段曾融合 [jiwen](https://github.com/ClaraShafiq/jiwen) 的连续状态思路与 [MemoryConstellations](https://github.com/ClaraShafiq/MemoryConstellations) 的分层记忆组织。历史边界与交付顺序见 `docs/archive/legacy-routes/JIWEN_MEMORY_CONSTELLATIONS_INTEGRATION.md` 和 ADR-0002；其中生活化连续状态结论已经失效。
 
 ### 14A.1 当轮表达与关系边界
 

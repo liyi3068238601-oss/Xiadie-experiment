@@ -1,7 +1,7 @@
 # Xiadie 助手优先实验分支计划
 
-- 日期：2026-08-01
-- 状态：助手优先路线已选定；RETIRE.0～RETIRE.3 已实施
+- 日期：2026-08-02
+- 状态：助手优先路线已选定；RETIRE.0～RETIRE.3 与 LOG.0 已完成
 - 仓库：`https://github.com/liyi3068238601-oss/Xiadie-experiment`
 - 默认分支：`main`
 - 分叉点：`a93df0e`
@@ -43,6 +43,9 @@ Cyrene-Agent 只作为 Chat/Work 分层、Agent 与底层模型分离、任务�
 | LIFE Event Ledger | 删除 | 真实系统/交互事件由 Message、TaskRun、ToolRun 和 AuditEvent 各自拥有 |
 | Proactive | 改造后保留 | 基于用户任务、承诺和近期安排主动帮助，不基于虚构生活发起话题 |
 | KIG / CTX / CDS / EAP | 保留 | 继续承担知识、上下文、认知和情感安全治理 |
+| 运行日志 | 拆分建设 | 现有页面改称运行审计；另建实时、脱敏的诊断终端 |
+| 插件系统 | 后续新增 | 在 TaskRun、ToolRegistry、权限和日志底座稳定后建设 PluginHost；Feeling 作为候选插件 |
+| Live2D | 过渡保留 | 先隔离为 PresentationAdapter，替代入口稳定后在实验后期移除 |
 | CIE | 保留 | 继续承担自然聊天节奏、取消、流式响应和呈现协议 |
 | 工具调用与任务执行 | 强化 | 成为本路线的核心能力，所有执行继续遵守真实性与授权边界 |
 
@@ -51,7 +54,7 @@ Cyrene-Agent 只作为 Chat/Work 分层、Agent 与底层模型分离、任务�
 - 物理删除前必须完成数据分类、dry-run、用户事实迁移、完整性检查和本地备份。
 - 不让 Persona 伪装现实人类，不虚构身体、线下活动、亲自使用体验或实时事实。
 - 不以“作为 AI”作为回答开场，不把底层模型身份覆盖为遐蝶身份。
-- 不保存或展示 chain-of-thought、自由文本内心独白和模型隐藏推理。
+- 不保存或展示 Provider 隐藏 chain-of-thought、reasoning token 和系统内部推理草稿；通过受控字段显式生成、标记为用户可见的心理活动、内心独白摘要与 Feeling 状态可以进入本地日志。
 - 不因为停用模拟生活而同时丢弃用户记忆、近期安排、关系分寸和人格连续性。
 - 不把世界书常驻塞入每轮；只保留 Persona Core 每轮必达。
 - 不把实验分支的数据库副本与 LIFE 主线共用；两边写入必须物理隔离。
@@ -81,6 +84,15 @@ Cyrene-Agent 只作为 Chat/Work 分层、Agent 与底层模型分离、任务�
 - [x] 已完成文档冻结、运行时断开、API/UI 移除、用户事实迁移、Schema 删除与验收记录。
 - [x] 删除前生成可恢复 JSON 备份；真实库由 Schema 82 升至 Schema 84。
 
+### LOG.0～LOG.5：可观测性与诊断
+
+- [x] LOG.0 已冻结运行审计/诊断终端双界面、日志协议、隐私边界和施工硬门。
+- [x] LOG.1～LOG.2 已建立统一 Logger、JSONL、TraceContext 和 ToolRun v2 实验基线。
+- [x] LOG.3～LOG.5 已建立实时 SSE、前端诊断终端、Electron 启动链日志和支持包实验基线。
+- [x] 当前已接入的 Electron 生命周期错误与 ToolRun v2 错误会直接显示失败进程、模块、工具、阶段、错误类型、脱敏消息和关联 ID；未来工具必须经统一包装器接入后才获得同等保证。
+
+详细施工按 `docs/OBSERVABILITY_AND_DIAGNOSTIC_LOGGING_PLAN.md` 执行。日志底座稳定后再扩大工具和插件能力。
+
 ### EXP2：记忆与主动行为重新归属
 
 - 将 ShortMemo 限定为用户安排、待办、约定和近期上下文。
@@ -103,7 +115,7 @@ Cyrene-Agent 只作为 Chat/Work 分层、Agent 与底层模型分离、任务�
 
 ## 6. 长期路线入口
 
-长期 Chat/Work、TaskRun、ToolRegistry、Web/Research、文件与办公工具、MCP、受控主动 Agent 和 Worker 路线统一见：
+长期 Observability、Chat/Work、TaskRun、ToolRegistry、PluginHost、Web/Research、文件与办公工具、MCP、受控主动 Agent、Worker 和 Live2D 退场路线统一见：
 
 `docs/CYRENE_STYLE_AGENT_LONG_TERM_ROADMAP.md`
 
@@ -125,4 +137,4 @@ Cyrene-Agent 只作为 Chat/Work 分层、Agent 与底层模型分离、任务�
 - [x] 后端定向测试、前端全量测试/构建和桌面端生命周期测试通过。
 - [x] EXP0 独立端口、AppData、日志、安装身份、单实例锁与并行启动边界已经完成并通过 9756 实际健康检查。
 
-完成本文件只代表实验环境可继续开发，不改变 `Xiadie1.0` 的 LIFE2.7 施工授权与顺序。实验版后续代码必须按退役迁移计划和 Cyrene 长期路线实施。
+完成本文件只代表实验环境可继续开发，不改变 `Xiadie1.0` 的独立历史。实验版后续代码必须按可观测性施工计划、Cyrene 长期路线和助手优先所有权矩阵实施。

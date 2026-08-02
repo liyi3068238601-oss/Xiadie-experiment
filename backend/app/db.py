@@ -4123,6 +4123,93 @@ MIGRATIONS = [
         DROP TABLE life_events;
         """,
     ),
+    (
+        85,
+        """
+        -- LOG.2: authoritative ToolRun v2 and governed visible mental activity log.
+        CREATE TABLE tool_runs (
+            id TEXT PRIMARY KEY,
+            trace_id TEXT NOT NULL,
+            parent_span_id TEXT,
+            session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+            task_run_id TEXT,
+            plugin_id TEXT,
+            tool_name TEXT NOT NULL,
+            tool_version TEXT NOT NULL DEFAULT '1',
+            risk_level TEXT NOT NULL DEFAULT 'S0',
+            permission_grant_id TEXT,
+            status TEXT NOT NULL CHECK(status IN (
+                'queued','authorizing','running','succeeded','failed',
+                'cancelled','denied','timed_out'
+            )),
+            phase TEXT NOT NULL CHECK(phase IN (
+                'queued','resolving','authorizing','executing','verifying','terminal'
+            )),
+            attempt INTEGER NOT NULL DEFAULT 1 CHECK(attempt >= 1),
+            queued_at REAL NOT NULL,
+            started_at REAL,
+            finished_at REAL,
+            duration_ms INTEGER,
+            arguments_summary_json TEXT NOT NULL DEFAULT '{}',
+            result_summary_json TEXT NOT NULL DEFAULT '{}',
+            artifact_ids_json TEXT NOT NULL DEFAULT '[]',
+            error_code TEXT,
+            error_type TEXT,
+            error_message TEXT,
+            stack_ref TEXT,
+            cancellation_reason TEXT,
+            idempotency_key TEXT,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL
+        );
+        CREATE INDEX idx_tool_runs_created ON tool_runs(created_at DESC,id DESC);
+        CREATE INDEX idx_tool_runs_trace ON tool_runs(trace_id,created_at,id);
+        CREATE INDEX idx_tool_runs_task ON tool_runs(task_run_id,created_at,id);
+        CREATE INDEX idx_tool_runs_status ON tool_runs(status,updated_at,id);
+        CREATE UNIQUE INDEX idx_tool_runs_idempotency
+            ON tool_runs(idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+        CREATE TABLE tool_run_events (
+            id TEXT PRIMARY KEY,
+            tool_run_id TEXT NOT NULL REFERENCES tool_runs(id) ON DELETE CASCADE,
+            event_type TEXT NOT NULL,
+            from_status TEXT,
+            to_status TEXT NOT NULL,
+            phase TEXT NOT NULL,
+            attempt INTEGER NOT NULL DEFAULT 1,
+            error_code TEXT,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            created_at REAL NOT NULL
+        );
+        CREATE INDEX idx_tool_run_events_run
+            ON tool_run_events(tool_run_id,created_at,id);
+
+        CREATE TABLE mental_activity_logs (
+            id TEXT PRIMARY KEY,
+            session_id TEXT REFERENCES sessions(id) ON DELETE CASCADE,
+            trace_id TEXT,
+            turn_id TEXT,
+            event_kind TEXT NOT NULL CHECK(event_kind IN (
+                'bot_planning','reply_committed','tool_selected','feeling_changed',
+                'feeling_decayed','generation_interrupted','context_recalled'
+            )),
+            origin TEXT NOT NULL CHECK(origin IN ('explicit_model_field','plugin','system')),
+            visibility TEXT NOT NULL DEFAULT 'user_visible' CHECK(visibility='user_visible'),
+            thought TEXT NOT NULL DEFAULT '' CHECK(length(thought) <= 240),
+            mood TEXT NOT NULL DEFAULT '' CHECK(length(mood) <= 16),
+            intensity REAL CHECK(intensity IS NULL OR intensity BETWEEN 0 AND 1),
+            expected_reaction TEXT NOT NULL DEFAULT '' CHECK(length(expected_reaction) <= 120),
+            reason TEXT NOT NULL DEFAULT '' CHECK(length(reason) <= 80),
+            action_summaries_json TEXT NOT NULL DEFAULT '[]',
+            retention_class TEXT NOT NULL DEFAULT 'conversation_bounded',
+            created_at REAL NOT NULL
+        );
+        CREATE INDEX idx_mental_activity_session
+            ON mental_activity_logs(session_id,created_at DESC,id DESC);
+        CREATE INDEX idx_mental_activity_trace
+            ON mental_activity_logs(trace_id,created_at,id);
+        """,
+    ),
 ]
 
 # 默认供应商：全部 OpenAI-Compatible。api_key 开发期存本地库，
@@ -4282,6 +4369,17 @@ def get_setting(key: str, default: str = "") -> str:
     try:
         row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
         return row["value"] if row else default
+    finally:
+        conn.close()
+
+
+def get_schema_version(default: int = 0) -> int:
+    conn = connect()
+    try:
+        row = conn.execute(
+            "SELECT value FROM schema_meta WHERE key = 'schema_version'"
+        ).fetchone()
+        return int(row["value"]) if row else int(default)
     finally:
         conn.close()
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as api from "./../api";
 import { toast } from "./../store";
+import { DiagnosticTerminalPage } from "./DiagnosticTerminalPage";
 
 type CategoryFilter = "all" | api.RuntimeLogCategory;
 type StatusFilter = "all" | api.RuntimeLogStatus;
@@ -70,6 +71,7 @@ function fmtDetail(key: string, value: unknown): string {
 }
 
 export function ToolLogsPage() {
+  const [surface, setSurface] = useState<"audit" | "diagnostic">("audit");
   const [feed, setFeed] = useState<api.RuntimeLogFeed | null>(null);
   const [category, setCategory] = useState<CategoryFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("all");
@@ -141,15 +143,20 @@ export function ToolLogsPage() {
     }
   };
 
+  if (surface === "diagnostic") {
+    return <DiagnosticTerminalPage onAudit={() => setSurface("audit")} />;
+  }
+
   return (
     <div className="page runtime-logs-page">
       <header className="page-header compact-page-header runtime-log-header">
         <div>
-          <p className="page-eyebrow">RUNTIME OBSERVABILITY</p>
-          <h1>运行日志</h1>
-          <p>模型、决策、检索、上下文与工具调用的本地只读审计视图。</p>
+          <p className="page-eyebrow">RUNTIME AUDIT</p>
+          <h1>运行审计</h1>
+          <p>模型、决策、检索、上下文与工具运行权威事实的本地只读审计视图。</p>
         </div>
         <div className="runtime-log-actions">
+          <button className="btn ghost" onClick={() => setSurface("diagnostic")}>诊断终端</button>
           <label className="runtime-auto-refresh">
             <input
               type="checkbox"

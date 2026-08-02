@@ -6,6 +6,7 @@
 import hashlib
 import json
 import logging
+import time
 from contextlib import asynccontextmanager
 from typing import Optional
 from urllib.parse import unquote
@@ -14,6 +15,11 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+
+from .observability import bind_context, configure_observability, log_event, new_trace_id
+
+# Configure before importing domain modules so their existing stdlib logging calls are captured.
+configure_observability()
 
 from . import (
     archivist, archivist_worker, cognitive_decision, cognition_calibration,
@@ -51,6 +57,7 @@ from .proactive import delivery as proactive_delivery
 from .proactive import feedback as proactive_feedback
 from .security import ALLOWED_ORIGINS, TOKEN_HEADER, local_api_guard
 from .pwm_api import router as pwm_router
+from .observability.api import router as diagnostics_router
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +126,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="遐蝶 Agent Backend", version="0.1.0", lifespan=lifespan)
 app.include_router(pwm_router)
+app.include_router(diagnostics_router)
 
 # init 也在模块导入时执行一次，保证裸 TestClient（不走 lifespan）也有表可用。
 db.init_db()
@@ -139,6 +147,38 @@ app.add_middleware(
   ],
 )
 app.middleware("http")(local_api_guard)
+
+
+@app.middleware("http")
+async def diagnostic_trace_middleware(request: Request, call_next):
+    raw_request_id = request.headers.get("X-Request-ID", "")
+    request_id = raw_request_id[:80] if raw_request_id.isascii() else ""
+    trace_id = new_trace_id()
+    started = time.monotonic()
+    with bind_context(trace_id=trace_id, request_id=request_id or f"req_{db.new_id()}"):
+        quiet = request.url.path == "/api/health" or request.url.path.startswith("/api/diagnostics")
+        if not quiet:
+            log_event("http.server", "INFO", "http_request_started", "HTTP request started", fields={
+                "method": request.method, "path": request.url.path,
+            })
+        try:
+            response = await call_next(request)
+        except BaseException as exc:
+            log_event("http.server", "ERROR", "http_request_failed", "HTTP request failed",
+                      error=exc, fields={
+                          "method": request.method, "path": request.url.path,
+                          "duration_ms": round((time.monotonic() - started) * 1000),
+                      })
+            raise
+        response.headers["X-Xiadie-Trace-Id"] = trace_id
+        if not quiet:
+            level = "WARNING" if response.status_code >= 400 else "INFO"
+            log_event("http.server", level, "http_request_completed", "HTTP request completed", fields={
+                "method": request.method, "path": request.url.path,
+                "status": response.status_code,
+                "duration_ms": round((time.monotonic() - started) * 1000),
+            })
+        return response
 
 
 # ---------------------------------------------------------------- 基础

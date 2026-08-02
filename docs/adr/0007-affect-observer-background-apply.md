@@ -3,7 +3,7 @@
 - 状态：Accepted
 - 日期：2026-07-15
 - 决策者：项目所有者、Codex
-- 关联计划：`docs/AFFECT_AND_RELATIONSHIP_SYSTEM_PLAN.md` 阶段 2.3
+- 关联计划：`docs/archive/legacy-routes/AFFECT_AND_RELATIONSHIP_SYSTEM_PLAN.md` 阶段 2.3
 
 ## 背景
 

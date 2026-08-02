@@ -80,6 +80,9 @@ def test_kig0_plan_and_life_freeze_have_no_unchecked_completion_items():
     kig_plan = (PROJECT_DIR / "docs" / "XIADIE_KNOWLEDGE_INTELLIGENCE_GOVERNANCE_AND_WORLD_MODEL_PLAN.md").read_text(encoding="utf-8")
     kig0 = kig_plan.split("### KIG.0：", 1)[1].split("### KIG.1：", 1)[0]
     assert "- [ ]" not in kig0
-    life_plan = (PROJECT_DIR / "docs" / "LLM_DECISION_AND_LIFE_CONTINUITY_PLAN.md").read_text(encoding="utf-8")
+    life_plan = (
+        PROJECT_DIR / "docs" / "archive" / "legacy-routes"
+        / "LLM_DECISION_AND_LIFE_CONTINUITY_PLAN.md"
+    ).read_text(encoding="utf-8")
     life_stages = life_plan.split("### LIFE.0：", 1)[1].split("## 11.", 1)[0]
     assert "- [ ]" not in life_stages

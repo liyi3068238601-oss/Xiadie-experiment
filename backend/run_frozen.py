@@ -61,6 +61,6 @@ def start_parent_watchdog() -> None:
 
 if __name__ == "__main__":
     start_parent_watchdog()
-    port = int(os.environ.get("XIADIE_PORT", "8756"))
+    port = int(os.environ.get("XIADIE_PORT", "9756"))
     # 冻结环境不能用 reload；用 app 对象直接跑。
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")

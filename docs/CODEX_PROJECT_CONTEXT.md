@@ -1,12 +1,12 @@
 # 遐蝶 Codex 项目上下文
 
-> 助手优先路线更新（2026-08-01）：`Xiadie-experiment` 已决定退役并物理移除 LIFE 生活模拟。Persona、WorldBook 和 ShortMemo 中有通用价值的部分继续保留，但 ShortMemo 迁入 Task/CTX/MEM，InnerStateProjection 删除。现行最高优先级规范为 `docs/ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md`；LIFE v1/v2 文档仅保留历史施工证据。
+> 助手优先路线更新（2026-08-02）：`Xiadie-experiment` 已物理移除 LIFE 生活模拟。Persona、WorldBook 和 ShortMemo 中有通用价值的部分继续保留，但 ShortMemo 迁入 Task/CTX/MEM，InnerStateProjection 删除。旧路线文档集中归档到 `docs/archive/legacy-routes/`；当前先建设诊断日志底座，再推进 TaskRun、ToolRegistry 与插件宿主。
 
 > 状态：当前执行约束  
 > 适用对象：Codex、维护者和后续参与开发的协作者  
 > 项目根目录：`E:\Xiadie\Xiadie-experiment`
 > 当前产品基线：v0.1.0  
-> 最后更新：2026-07-29
+> 最后更新：2026-08-02
 
 ## 1. 使用方式
 
@@ -58,12 +58,13 @@
 
 1. 用户在当前任务中的明确指令。
 2. `docs/ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md`。
-3. `docs/CYRENE_STYLE_AGENT_EXPERIMENT_PLAN.md`。
-4. 本文件。
-5. `docs/XIADIE_LONG_TERM_ROADMAP.md`。
-6. 仓库内已接受且未被助手优先路线取代的 ADR。
-7. MEM、CTX、Knowledge、EAP、CDS、KIG、CIE、Persona 专项中未冲突的部分。
-8. LIFE v1/v2、旧 Affect/EAP 生活化段落和旧多 Agent 文档只作历史参考。
+3. 当前任务对应的现行专项计划；日志施工以 `docs/OBSERVABILITY_AND_DIAGNOSTIC_LOGGING_PLAN.md` 为准。
+4. `docs/CYRENE_STYLE_AGENT_EXPERIMENT_PLAN.md` 与 `docs/CYRENE_STYLE_AGENT_LONG_TERM_ROADMAP.md`。
+5. 本文件。
+6. `docs/XIADIE_LONG_TERM_ROADMAP.md`。
+7. 仓库内已接受且未被助手优先路线取代的 ADR。
+8. MEM、CTX、Knowledge、EAP、CDS、KIG、CIE、Persona 专项中未冲突的部分。
+9. `docs/archive/legacy-routes/`、旧 LIFE/Affect/EAP 生活化段落和旧多 Agent 文档只作历史参考。
 
 设计文档的 v0.3、v0.5、v0.6 是文档修订号，不是应用发布版本。应用版本从当前 v0.1.0 继续推进。
 
@@ -74,8 +75,8 @@
   自然召回、远传策略、一次性授权、记忆隔离和生命周期均以 ADR-0036～ADR-0044 为准。
 - 对话上下文 CTX.0～CTX.7：`docs/CONVERSATION_CONTEXT_AND_SUMMARY_PLAN.md`。该计划已完成总验收并通过独立 strict review；
   schema 45 与上下文 v1 已冻结，普通自动历史召回继续 shadow。
-- 已关闭专项：`docs/EMOTION_RELATIONSHIP_AND_PROACTIVE_COMPANION_PLAN.md` 第 9.B 节 EAP.R0～EAP.R6。Schema 48～60 与六个 EAP 协议已通过独立 strict review 并正式冻结；不得另建重复情绪、关系或主动投递源。
-- 退役专项：`docs/LLM_DECISION_AND_LIFE_CONTINUITY_PLAN.md`。LIFE.0～13 的历史施工和验收事实保留，但其产品结论已被助手优先退役计划取代。实验版不得新增 LIFE 写路径、运行时消费或前端入口。
+- 已关闭专项：`docs/archive/legacy-routes/EMOTION_RELATIONSHIP_AND_PROACTIVE_COMPANION_PLAN.md` 第 9.B 节 EAP.R0～EAP.R6。Schema 48～60 与六个 EAP 协议已通过独立 strict review 并正式冻结；不得另建重复情绪、关系或主动投递源。
+- 退役专项：`docs/archive/legacy-routes/LLM_DECISION_AND_LIFE_CONTINUITY_PLAN.md`。LIFE.0～13 的历史施工和验收事实保留，但其产品结论已被助手优先退役计划取代。实验版不得新增 LIFE 写路径、运行时消费或前端入口。
 - Persona/WorldBook/ShortMemo：保留通用能力；ShortMemo 迁出 LIFE，InnerStateProjection 退役。
 
 ---
@@ -102,12 +103,12 @@
 
 ### 4.3 Live2D 策略
 
-- Live2D 是产品固定角色体验，不是换皮框架。
-- 模型从固定内置路径加载。
-- 不实现用户导入模型、选择模型目录、模型市场或模型切换。
-- 设置页只能控制显示行为，例如置顶、穿透、缩放、透明度、气泡、动作和位置。
-- 模型缺失时必须显示占位并保持应用可用，不能崩溃。
-- 正式发行资产必须原创或具有明确再分发授权。
+- Live2D 是实验期过渡表现层，不再是长期不可替换的核心架构。
+- 当前继续从固定内置路径加载，不扩展用户导入、模型市场或模型切换。
+- Agent Core 只输出 `PresentationIntent`，由 `PresentationAdapter` 适配 React、Live2D 或未来桌面壳。
+- 模型缺失或 adapter 关闭时，主窗口、托盘、聊天、任务和诊断必须独立可用。
+- 先完成表现层解耦和非 Live2D 入口验收，再在实验路线后期移除 renderer、IPC、设置和资产链。
+- 移除前使用的资产仍必须原创或具有明确再分发授权。
 
 ### 4.4 Agent 形态
 
@@ -126,6 +127,14 @@
 - 用户重要日期、约定和项目事实必须先迁移到 Memory/Task/Reminder，再删除 LIFE 数据结构。
 - KIG 检索源不再包含 `life`；PWM 不得保存模拟生活或虚构心境。
 
+### 4.6 可观测性与插件边界
+
+- “运行审计”保存授权、执行和结果等业务事实；“诊断终端”显示实时结构化运行事件，两者不得混为第二套业务状态。
+- “运行审计”仍是业务表聚合视图；LOG.1～LOG.5 实验基线已另行提供统一 Logger、JSONL、TraceContext、ToolRun v2、诊断 SSE 和前端“诊断终端”。两套界面职责不同，不得用实时日志替代业务权威状态。
+- 日志不得保存密钥、完整提示词、聊天/文件/记忆正文或 Provider 隐藏 chain-of-thought。插件或 Agent 通过 `mental-activity-log-v1` 显式生成并标记为 `user_visible` 的心理活动、内心独白摘要与 Feeling 状态允许本地记录和展示。
+- 插件宿主必须建立在 TaskRun、ToolRegistry、PermissionGuard 和 Observability 之上；插件不能直接访问全库、全文件系统或核心日志 sink。
+- Feeling 如后续实现，应作为受治理插件候选；允许维护会话隔离、可衰减的情绪状态，并将情绪、强度、短原因与显式心理活动显示在日志中，但不得恢复 LIFE 离线世界、关系压力或未授权主动动机。
+
 ---
 
 ## 5. 冻结的技术路线
@@ -137,7 +146,7 @@
 | 后端 | Python + FastAPI | Agent Core、模型接入、工具、权限、任务和知识。 |
 | 本地存储 | SQLite | 会话、消息、任务、记忆、配置和审计。 |
 | 模型协议 | OpenAI-compatible 基础适配 | 多供应商统一聊天和后续工具调用。 |
-| Live2D | PixiJS + pixi-live2d-display | 固定模型渲染、动作和情绪联动。 |
+| 表现层 | PresentationIntent + PresentationAdapter | 隔离 Agent Core 与 React/Live2D；Live2D 仅为过渡 adapter。 |
 
 不得为了统一语言而把 Python 后端整体改写为 TypeScript，也不得为了采用新框架而推倒现有前端或 Electron 壳。
 
@@ -191,13 +200,18 @@ Xiadie/
 - 用户明确选择的 TXT/Markdown/PDF/DOCX 可经过类型、容器、大小、配额和恶意内容校验后原子保存到应用
   数据目录；后台 worker 生成稳定 locator、contentless FTS 和本地 BGE-M3 dense 向量，支持混合召回、
   可验证对话引用、重建与可重试删除；模型失败时完整降级 FTS。
+- LOG.1～LOG.5 实验诊断基线：后端与 Electron 统一结构化事件、人类终端、滚动 JSONL、TraceContext、
+  5,000 条/8 MiB 内存缓冲、游标/gap/SSE、前端实时诊断终端、ToolRun v2 状态与详情、显式用户可见
+  心理活动日志，以及默认排除心理活动正文和其他敏感正文的支持包。
 
 ### 7.2 只有骨架或占位
 
 - 文件与知识已有 schema 35：在原完整闭环上增加文档远传策略和 Provider 执行位置地基；仍不会在普通陪伴对话中自动查询用户文件。扫描 PDF OCR、表格/图片
   资料解析和审计长期归档策略尚未实现。
-- 运行日志已能只读聚合模型调用元数据、决策摘要、检索、上下文组装和现有 `tool_logs`；
-  聊天事件可按需查看本地持久化的一轮用户输入与助手最终回复，但不展示隐藏思维链、系统提示词、密钥、知识正文或记忆正文。该视图不是逐 chunk 回放，不能替代 CIE 固定集与专项 smoke；工具分类仍没有真实 `ToolRegistry` 调用写入。
+- 运行审计已能只读聚合模型调用元数据、决策摘要、检索、上下文组装和现有 `tool_logs`；
+  聊天事件可按需查看本地持久化的一轮用户输入与助手最终回复，但不展示隐藏思维链、系统提示词、密钥、知识正文或记忆正文。该视图不是诊断终端，也不能替代 CIE 固定集与专项 smoke；工具分类仍没有真实 `ToolRegistry` 调用写入。
+- ToolRun v2 的 Schema、Repository、状态机和包装器已经可用，但现阶段尚无正式 ToolRegistry；未来文件、Web、代码和插件工具必须通过包装器接入，旧 `tool_logs` 仅只读兼容。
+- 可观测性正式发布硬化尚未完成 Windows 打包态只读目录、磁盘不足、慢 SSE 客户端和 1,000 events/s 故障注入；实验版日常诊断不再等待这些发布门禁。
 - 权限设置没有后端策略执行。
 - Live2D 设置多数没有真实持久化和 IPC 行为。
 - 数据导出、备份和恢复尚未实现。
@@ -388,12 +402,13 @@ node --check preload.js
 当前产品与施工入口按顺序为：
 
 1. `docs/ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md`
-2. `docs/CYRENE_STYLE_AGENT_LONG_TERM_ROADMAP.md`
-3. `docs/CYRENE_STYLE_AGENT_EXPERIMENT_PLAN.md`
-4. `docs/SPECIALTY_OWNERSHIP_AND_CONTRACT_MATRIX.md`
+2. `docs/OBSERVABILITY_AND_DIAGNOSTIC_LOGGING_PLAN.md`
+3. `docs/CYRENE_STYLE_AGENT_LONG_TERM_ROADMAP.md`
+4. `docs/CYRENE_STYLE_AGENT_EXPERIMENT_PLAN.md`
+5. `docs/SPECIALTY_OWNERSHIP_AND_CONTRACT_MATRIX.md`
 
 历史上知识库 F.1～F.8、K.0～K.9、CTX.0～CTX.7、EAP.R0～R6、CDS.0～13、LIFE.0～13、KIG.0～15、CIE.0～6 与 LIFE2.0～6 均已完成各自施工。其 Schema、测试和 Review 事实继续有效，但产品方向已改变：LIFE 退役，Persona/WorldBook/ShortMemo 拆分保留，其他专项按助手优先矩阵重新接线。
 
-RETIRE.0～RETIRE.3 已于 2026-08-01 完成，现有数据库已经备份、迁移并删除 LIFE 表。当前固定施工顺序从 `CYR.1 → CYR.2 → CYR.3` 继续；未完成 ToolRegistry、权限、产物和恢复前不得开放任意 Shell、任意文件系统、桌面输入控制或外部消息发送。
+RETIRE.0～RETIRE.3 已于 2026-08-01 完成，现有数据库已经备份、迁移并删除 LIFE 表。LOG.0 已于 2026-08-02 冻结；当前固定施工顺序为 `LOG.1 → LOG.2 → LOG.3/4/5 → CYR.1 → CYR.2 → CYR.3 → PLUG.0`。未完成 ToolRegistry、权限、产物和恢复前不得开放任意 Shell、任意文件系统、桌面输入控制或外部消息发送。
 
 EAP 的最终授权复核、恢复保护窗、at-most-once 投递与外部渠道硬门继续有效；KIG 的 SourceRef、证据、版本/新鲜度与 PWM 可重建原则继续有效；CIE 的取消、图片授权与 ContextContribution 治理继续有效。LIFE adapter、life source、InnerStateProjection 和生活化主动 seed 不再受“冻结兼容”保护，应按退役计划删除。

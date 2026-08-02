@@ -9,6 +9,7 @@ const { fileURLToPath } = require("url");
 const { spawn } = require("child_process");
 const http = require("http");
 const { randomBytes } = require("crypto");
+const { DesktopDiagnosticLogger } = require("./diagnostic-logger");
 
 // 实验版必须拥有独立的 Electron 身份和用户数据根，不能因为复用遐蝶
 // 代码而落入正式版的 AppData。此设置必须发生在 ready 和单实例锁之前。
@@ -30,6 +31,7 @@ const inheritedToken = process.env.XIADIE_API_TOKEN || "";
 const API_TOKEN = isDev && inheritedToken.length >= 32
   ? inheritedToken
   : randomBytes(32).toString("base64url");
+const desktopLogger = new DesktopDiagnosticLogger(app.getPath("userData"));
 
 let petWin = null;
 let mainWin = null;
@@ -69,6 +71,11 @@ function backendJson(method, apiPath, body) {
     req.end();
   });
 }
+
+desktopLogger.setIngestor((event) => backendJson("POST", "/api/diagnostics/ingest", event));
+desktopLogger.log("INFO", "desktop_started", "Electron main process started", {
+  app_id: APP_ID, dev: isDev, backend_port: BACKEND_PORT,
+});
 
 async function acknowledgeDelivery(item, success, errorCode) {
   try {
@@ -136,7 +143,8 @@ async function pollProactiveDelivery() {
       return true;
     }
   } catch (error) {
-    console.warn("proactive delivery bridge unavailable:", error.message);
+    desktopLogger.log("WARNING", "proactive_delivery_bridge_unavailable",
+      "Proactive delivery bridge unavailable", { error_type: error.name, error_message: error.message });
     return false;
   } finally {
     deliveryBusy = false;
@@ -172,20 +180,29 @@ function frontendUrl(page) {
 function startBackend() {
   // 生产环境随应用启动本地 FastAPI（PyInstaller 冻结的独立 exe）；
   // dev 期假定开发者已手动 `python run.py`。
-  if (isDev) return;
+  if (isDev) {
+    desktopLogger.log("INFO", "backend_external_dev", "Development backend is managed externally");
+    return;
+  }
   // 冻结后端在 resources/backend/xiadie-backend(.exe)
   const exeName =
     process.platform === "win32" ? "xiadie-backend.exe" : "xiadie-backend";
   const backendExe = path.join(process.resourcesPath, "backend", exeName);
   // 数据写入用户可写目录（resources 是只读的），后端读 XIADIE_DATA_DIR
   const dataDir = path.join(app.getPath("userData"), "data");
+  const logDir = path.join(app.getPath("userData"), "logs");
+  desktopLogger.log("INFO", "backend_starting", "Starting bundled backend", {
+    executable: path.basename(backendExe), port: BACKEND_PORT,
+  });
   backendProc = spawn(backendExe, [], {
     cwd: path.dirname(backendExe),
-    stdio: "ignore",
+    stdio: ["ignore", "pipe", "pipe"],
     env: {
       ...process.env,
       XIADIE_API_TOKEN: API_TOKEN,
       XIADIE_DATA_DIR: dataDir,
+      XIADIE_LOG_DIR: logDir,
+      XIADIE_PROCESS_NAME: "backend",
       XIADIE_PORT: String(BACKEND_PORT),
       XIADIE_PARENT_PID: String(process.pid),
       XIADIE_BGE_M3_DIR: path.join(process.resourcesPath, "models", "bge-m3"),
@@ -193,12 +210,56 @@ function startBackend() {
   });
   // 必须监听 error：否则 ENOENT 会作为未处理的 EventEmitter error 抛出，导致主进程崩溃。
   backendProc.on("error", (e) => {
-    console.error("后端启动失败:", e);
+    desktopLogger.log("ERROR", "backend_start_failed", "Backend process failed to start", {
+      error_type: e.name, error_message: e.message, code: e.code,
+    });
     backendProc = null;
   });
   backendProc.on("exit", (code, signal) => {
-    console.warn(`后端退出: code=${code} signal=${signal}`);
+    desktopLogger.log(code === 0 ? "INFO" : "ERROR", "backend_exited", "Backend process exited", {
+      exit_code: code, signal,
+    });
     backendProc = null;
+  });
+  const connectLines = (stream, streamName) => {
+    if (!stream) return;
+    let buffer = "";
+    stream.setEncoding("utf8");
+    stream.on("data", (chunk) => {
+      buffer += chunk.replace(/\r\n/g, "\n");
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const isError = streamName === "stderr" && /\b(ERR|ERROR|CRITICAL|Traceback)\b/i.test(line);
+        const isWarning = /\b(WRN|WARN|WARNING)\b/i.test(line);
+        desktopLogger.log(isError ? "ERROR" : isWarning ? "WARNING" : "DEBUG",
+          "backend_process_output", line, { stream: streamName }, {
+            logger: "desktop.backend_process", forward: isError || isWarning,
+          });
+      }
+    });
+  };
+  connectLines(backendProc.stdout, "stdout");
+  connectLines(backendProc.stderr, "stderr");
+}
+
+function attachWindowDiagnostics(win, label) {
+  win.webContents.on("did-fail-load", (_event, code, description, validatedURL, isMainFrame) => {
+    if (!isMainFrame) return;
+    desktopLogger.log("ERROR", "renderer_load_failed", `${label} failed to load`, {
+      error_code: code, error_message: description, url_kind: validatedURL.startsWith("file:") ? "file" : "http",
+    });
+  });
+  win.webContents.on("render-process-gone", (_event, details) => {
+    desktopLogger.log("ERROR", "renderer_process_gone", `${label} renderer exited`, {
+      reason: details.reason, exit_code: details.exitCode,
+    });
+  });
+  win.webContents.on("preload-error", (_event, preloadPath, error) => {
+    desktopLogger.log("ERROR", "preload_failed", `${label} preload failed`, {
+      preload: path.basename(preloadPath), error_type: error.name, error_message: error.message,
+    });
   });
 }
 
@@ -206,10 +267,19 @@ function waitForBackend(cb, tries = 0) {
   http
     .get(`http://127.0.0.1:${BACKEND_PORT}/api/health`, (res) => {
       res.resume();
+      desktopLogger.log("INFO", "backend_ready", "Backend health check succeeded", {
+        attempts: tries + 1, port: BACKEND_PORT,
+      });
+      void desktopLogger.flush();
       cb(true);
     })
     .on("error", () => {
-      if (tries > 40) return cb(false);
+      if (tries > 40) {
+        desktopLogger.log("ERROR", "backend_readiness_timeout", "Backend readiness timed out", {
+          attempts: tries + 1, port: BACKEND_PORT,
+        });
+        return cb(false);
+      }
       setTimeout(() => waitForBackend(cb, tries + 1), 500);
     });
 }
@@ -234,6 +304,7 @@ function createPetWindow() {
     },
   });
   petWin.setAlwaysOnTop(true, "screen-saver");
+  attachWindowDiagnostics(petWin, "pet");
   petWin.loadURL(frontendUrl("pet.html"));
   petWin.on("closed", () => (petWin = null));
   // 任何来源的显隐变化都刷新托盘标签（hide-pet / resetPet / togglePet 均覆盖）
@@ -265,6 +336,7 @@ function createMainWindow() {
       contextIsolation: true,
     },
   });
+  attachWindowDiagnostics(mainWin, "main");
   mainWin.loadURL(frontendUrl("index.html"));
   mainWin.once("ready-to-show", () => mainWin.show());
   mainWin.on("resize", () => {
@@ -420,12 +492,14 @@ app.whenReady().then(() => {
   powerMonitor.on("suspend", () => stopDeliveryBridge());
   powerMonitor.on("resume", () => {
     void backendJson("POST", "/api/proactive/runtime/system-resume")
-      .catch((error) => console.warn("proactive resume guard unavailable:", error.message))
+      .catch((error) => desktopLogger.log("WARNING", "proactive_resume_guard_unavailable",
+        "Proactive resume guard unavailable", { error_type: error.name, error_message: error.message }))
       .finally(() => startDeliveryBridge());
   });
   if (isDev) {
     createPetWindow();
     startDeliveryBridge();
+    waitForBackend(() => void desktopLogger.flush());
   } else {
     waitForBackend((ready) => {
       createPetWindow();
@@ -446,6 +520,7 @@ app.on("activate", () => {
 });
 
 app.on("before-quit", () => {
+  desktopLogger.log("INFO", "desktop_stopping", "Electron main process stopping", {}, { forward: false });
   app.isQuitting = true;
   stopDeliveryBridge();
   if (backendProc) backendProc.kill();
