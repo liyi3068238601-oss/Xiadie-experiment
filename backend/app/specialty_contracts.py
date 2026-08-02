@@ -1,8 +1,8 @@
-"""Minimal CDS adapter contracts for future LIFE and KIG implementations.
+"""Minimal CDS adapter contracts for KIG and other governed specialties.
 
 The contracts are deliberately body-free and contain no domain implementation.
-LIFE remains the owner of life sources; KIG remains the owner of validated
-knowledge/PWM candidates; domain owners remain the only effect writers.
+KIG remains the owner of validated knowledge/PWM candidates; domain owners
+remain the only effect writers.
 """
 from __future__ import annotations
 
@@ -14,18 +14,10 @@ from typing import Literal, Protocol, TypedDict, runtime_checkable
 CONTRACT_VERSION = "specialty-adapter-contract-v1"
 
 SourceKind = Literal[
-    "life_event",
-    "diary_entry",
-    "important_date",
-    "personal_goal",
-    "self_timeline",
     "knowledge_object",
     "pwm_projection",
 ]
 
-LIFE_SOURCE_KINDS = frozenset({
-    "life_event", "diary_entry", "important_date", "personal_goal", "self_timeline",
-})
 KIG_CANDIDATE_SOURCE_KINDS = frozenset({"knowledge_object", "pwm_projection"})
 PROGRAMMATIC_ONLY_SIGNALS = frozenset({"unanswered_pressure"})
 BACKGROUND_NARRATIVE_PRIORITY = "background"
@@ -63,8 +55,8 @@ class DecisionResult(TypedDict):
 
 
 @runtime_checkable
-class LifeSourceProvider(Protocol):
-    """Future LIFE implementation exposes revisions, never CDS-owned records."""
+class GovernedSourceProvider(Protocol):
+    """Domain implementations expose revisions, never CDS-owned records."""
 
     def read_source(self, source_id: str) -> RevisionRef | None: ...
 
@@ -80,7 +72,7 @@ def validate_revision_ref(value: RevisionRef) -> None:
     expected = {"kind", "id", "revision", "content_hash"}
     if set(value) != expected:
         raise ValueError("revision ref fields do not match the frozen contract")
-    if value["kind"] not in LIFE_SOURCE_KINDS | KIG_CANDIDATE_SOURCE_KINDS:
+    if value["kind"] not in KIG_CANDIDATE_SOURCE_KINDS:
         raise ValueError("source kind is not registered")
     if not value["id"] or not value["revision"]:
         raise ValueError("source identity and revision must be non-empty")
@@ -94,7 +86,7 @@ def validate_candidate_envelope(value: CandidateEnvelope) -> None:
         raise ValueError("candidate fields do not match the frozen contract")
     validate_revision_ref(value["source"])
     if value["source"]["kind"] not in KIG_CANDIDATE_SOURCE_KINDS:
-        raise ValueError("LIFE objects are sources, not shared candidates")
+        raise ValueError("source is not a registered KIG candidate")
     if not value["id"] or not value["candidate_kind"] or not value["candidate_revision"]:
         raise ValueError("candidate identity and revision must be non-empty")
     if not _HEX64.fullmatch(value["content_hash"]):
@@ -141,13 +133,13 @@ def validate_decision_result(
     if not set(value["selected_ids"]).issubset(candidate_ids):
         raise ValueError("decision selected a non-candidate ID")
     if value["application_allowed"]:
-        raise ValueError("shared LIFE/KIG contract cannot grant domain application")
+        raise ValueError("shared specialty contract cannot grant domain application")
 
 
-def event_idempotency_key(*, event_kind: Literal["life_event", "contact_event"],
+def event_idempotency_key(*, event_kind: Literal["contact_event"],
                           event_id: str, revision: str) -> str:
-    """Freeze stable identity for future LIFE events and existing EAP contact events."""
-    if event_kind not in {"life_event", "contact_event"}:
+    """Freeze stable identity for EAP contact events."""
+    if event_kind != "contact_event":
         raise ValueError("unsupported event kind")
     if not event_id or not revision:
         raise ValueError("event identity and revision must be non-empty")

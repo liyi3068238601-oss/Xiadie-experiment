@@ -591,7 +591,7 @@ def test_invalid_enum_values_return_400():
     assert client.patch(f"/api/tasks/{t['id']}", json={"status": "bogus"}).status_code == 400
 
 
-def test_companion_state_changes_after_successful_chat_and_resets():
+def test_chat_returns_request_local_state_without_persisting_simulated_affect():
     initial = client.post("/api/companion-state/reset").json()
     assert set(("affect", "relationship", "derived", "signals")) <= set(initial)
     assert initial["derived"]["style_guidance"]
@@ -608,62 +608,23 @@ def test_companion_state_changes_after_successful_chat_and_resets():
     assert '"companion_state": {' in stream_body
     assert '"guardedness_band":' in stream_body
 
+    # Assistant-first only returns request-local expression guidance.  It does
+    # not persist simulated affect or an interaction event across turns.
     changed = client.get("/api/companion-state").json()
-    assert changed["affect"]["contact_need"] < initial["affect"]["contact_need"]
-    assert changed["affect"]["guardedness"] < initial["affect"]["guardedness"]
-    assert changed["affect"]["immersion"] > initial["affect"]["immersion"]
-    # R2: fallback never changes relationship; only grounded cognition may do so later.
+    assert changed["affect"]["contact_need"] == initial["affect"]["contact_need"]
+    assert changed["affect"]["guardedness"] == initial["affect"]["guardedness"]
+    assert changed["affect"]["immersion"] == initial["affect"]["immersion"]
     assert changed["relationship"]["bond"] == initial["relationship"]["bond"]
-    assert changed["relationship"]["interaction_count"] == 1
-    for key in ("contact_need", "guardedness", "immersion"):
-        assert 0 <= changed["affect"][key] <= 1
-    for key in ("valence", "arousal"):
-        assert -1 <= changed["affect"][key] <= 1
-
+    assert changed["relationship"]["interaction_count"] == 0
     events = client.get("/api/companion-state/events").json()
-    assert events[0]["event_type"] == "interaction"
-    assert events[0]["source_message_id"]
+    assert events
+    assert any(event["event_type"] == "reset" for event in events)
+    assert all(event["event_type"] != "interaction" for event in events)
+    assert not {"interaction", "tick"} & {event["event_type"] for event in events}
 
     reset = client.post("/api/companion-state/reset").json()
     assert reset["affect"]["contact_need"] == initial["affect"]["contact_need"]
     assert reset["relationship"]["bond"] == initial["relationship"]["bond"]
-
-
-def test_affect_timeline_is_deterministic_and_handles_one_night_and_seven_days():
-    from app.affect import engine, repository
-
-    initial = {
-        "affect": dict(engine.DEFAULT_AFFECT),
-        "relationship": dict(engine.DEFAULT_RELATIONSHIP),
-    }
-    first = engine.advance(initial, 8 * 60)
-    second = engine.advance(initial, 8 * 60)
-    assert first == second
-    # 参数基线断言依赖 CONTACT_NEED_RATE_PER_MINUTE=0.00012；调参时必须同步复核整条时间线。
-    assert 0.10 < first["affect"]["contact_need"] < 0.13
-    assert first["affect"]["immersion"] < initial["affect"]["immersion"]
-    replied = engine.apply_fallback_interaction(first, "早上好，我回来了")
-    assert replied["affect"]["contact_need"] == 0.03
-    assert replied["relationship"]["bond"] == first["relationship"]["bond"]
-
-    day = engine.advance(initial, 24 * 60)
-    assert 0.22 < day["affect"]["contact_need"] < 0.25
-    assert engine.signals(day) == []
-
-    three_days = engine.advance(initial, 3 * 24 * 60)
-    assert 0.70 < three_days["affect"]["contact_need"] < 0.75
-    assert engine.signals(three_days)[0]["action"] == "find_activity"
-
-    week = engine.advance(initial, 7 * 24 * 60)
-    assert 0 <= week["affect"]["contact_need"] <= 1
-    assert -1 <= week["affect"]["valence"] <= 1
-    assert -1 <= week["affect"]["arousal"] <= 1
-    assert -0.25 <= week["affect"]["guardedness_transient"] <= 0.25
-
-    repository.reset()
-    ticked = client.post("/api/companion-state/tick", json={"minutes": 480}).json()
-    assert ticked["affect"]["contact_need"] > 0.05
-    assert client.post("/api/companion-state/tick", json={"minutes": 0}).status_code == 422
 
 
 def test_affect_math_boundaries_and_signal_thresholds():
@@ -699,38 +660,23 @@ def test_affect_math_boundaries_and_signal_thresholds():
     assert engine.signals(snapshot(0.75))[0]["action"] == "contact"
 
 
-def test_reply_reduces_contact_need_proportionally_and_rebases_latest_state():
+def test_request_local_guidance_starts_from_neutral_affect_and_never_rebases_state():
     from app import companion_state
     from app.affect import engine
 
-    low = {
-        "affect": {**engine.DEFAULT_AFFECT, "contact_need": 0.05},
-        "relationship": dict(engine.DEFAULT_RELATIONSHIP),
-    }
     high = {
         "affect": {**engine.DEFAULT_AFFECT, "contact_need": 0.80},
         "relationship": dict(engine.DEFAULT_RELATIONSHIP),
     }
-    low_reply = engine.apply_fallback_interaction(low, "我回来了")
-    high_reply = engine.apply_fallback_interaction(high, "我回来了")
-    assert low_reply["affect"]["contact_need"] == pytest.approx(0.03)
-    assert high_reply["affect"]["contact_need"] == pytest.approx(0.16)
-    assert high_reply["relationship"]["bond"] == high["relationship"]["bond"]
-    assert low_reply["relationship"]["bond"] == low["relationship"]["bond"]
-
     companion_state.reset_state()
-    stale_preview = companion_state.preview_interaction("较早生成的预览")
-    advanced = companion_state.tick(3 * 24 * 60)
-    saved = companion_state.commit_interaction("流式回复成功后提交")
-    assert advanced["affect"]["contact_need"] > 0.70
-    assert saved["affect"]["contact_need"] > stale_preview["affect"]["contact_need"]
-    assert saved["affect"]["contact_need"] == pytest.approx(
-        advanced["affect"]["contact_need"] * 0.20,
-        rel=0.02,
-    )
+    preview = companion_state.preview_current_turn("我回来了", high)
+    stored = companion_state.get_state()
+    assert preview["affect"]["contact_need"] == pytest.approx(0.03)
+    assert preview["relationship"]["bond"] == high["relationship"]["bond"]
+    assert stored["affect"]["contact_need"] == engine.DEFAULT_AFFECT["contact_need"]
 
 
-def test_generation_preview_advances_time_without_writing_state_or_event():
+def test_generation_preview_does_not_advance_time_or_write_state_event():
     from app import companion_state, db
 
     companion_state.reset_state()
@@ -749,7 +695,7 @@ def test_generation_preview_advances_time_without_writing_state_or_event():
         conn.close()
 
     preview = companion_state.get_state(persist_advance=False)
-    assert preview["affect"]["contact_need"] > stored_before
+    assert preview["affect"]["contact_need"] == stored_before
 
     conn = db.connect()
     try:
@@ -1018,7 +964,7 @@ def test_schema_migration_is_idempotent():
         version = conn.execute(
             "SELECT value FROM schema_meta WHERE key = 'schema_version'"
         ).fetchone()["value"]
-        assert version == "82"
+        assert version == "84"
         assert conn.execute("SELECT COUNT(*) c FROM companion_state").fetchone()["c"] <= 1
         assert conn.execute("SELECT COUNT(*) c FROM affect_state").fetchone()["c"] <= 1
         assert conn.execute("SELECT COUNT(*) c FROM relationship_state").fetchone()["c"] <= 1

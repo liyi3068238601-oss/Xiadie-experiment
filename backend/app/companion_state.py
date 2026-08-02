@@ -9,17 +9,30 @@ from .affect import engine, repository, tone_grid
 
 
 def get_state(*, persist_advance: bool = True) -> dict:
-    snapshot = (
-        repository.get_snapshot()
-        if persist_advance
-        else repository.get_preview_snapshot()
-    )
+    """Return grounded stored state without simulated elapsed-time progression."""
+    snapshot = repository.get_snapshot(advance_time=False)
     return _present(snapshot)
 
 
 def preview_interaction(user_text: str, current: dict | None = None) -> dict:
     internal = _internal(current or get_state(persist_advance=False))
     preview = engine.apply_fallback_interaction(internal, user_text)
+    preview["affect"]["last_user_message_at"] = db.now()
+    return _present(preview)
+
+
+def preview_current_turn(user_text: str, current: dict | None = None) -> dict:
+    """Build expression guidance without consuming cross-turn simulated affect.
+
+    Relationship remains the grounded interaction boundary.  Affect starts from
+    the neutral deterministic baseline and exists only for this request.
+    """
+    internal = _internal(current or get_state(persist_advance=False))
+    request_state = {
+        "affect": dict(engine.DEFAULT_AFFECT),
+        "relationship": dict(internal["relationship"]),
+    }
+    preview = engine.apply_fallback_interaction(request_state, user_text)
     preview["affect"]["last_user_message_at"] = db.now()
     return _present(preview)
 
@@ -57,10 +70,6 @@ def commit_interaction(
 
 def reset_state() -> dict:
     return _present(repository.reset())
-
-
-def tick(minutes: float) -> dict:
-    return _present(repository.advance_by(minutes))
 
 
 def list_events(limit: int = 50) -> list[dict]:

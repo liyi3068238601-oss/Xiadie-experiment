@@ -191,7 +191,7 @@ def _context_contribution_rejection(
             return "evidence_inactive"
         if current.revision != evidence.revision or current.content_hash != evidence.content_hash:
             return "evidence_stale"
-        if temporary_chat and current.source_kind in {"message", "memory_fragment", "life_event"}:
+        if temporary_chat and current.source_kind in {"message", "memory_fragment"}:
             return "temporary_chat_boundary"
         if provider_location != "local" and not _context_evidence_remote_allowed(current):
             return "evidence_remote_forbidden"
@@ -366,8 +366,6 @@ def _enabled_sources(provider: dict | None, *, temporary_chat: bool = False) -> 
     if db.get_setting("conversation_history_recall_mode", "explicit_only") == "off" \
             and "history" in sources:
         sources.remove("history")
-    if db.get_setting("life_enabled", "1") != "1" and "life" in sources:
-        sources.remove("life")
     if provider and provider.get("execution_location") == "remote" \
             and db.get_setting("kig_remote_task_evidence", "0") != "1":
         sources.remove("task")
@@ -383,7 +381,6 @@ def _filter_transfer(
     allowed_scopes = {
         "message": frozenset({"private"}),
         "memory_fragment": frozenset({"normal"}),
-        "life_event": frozenset({"private"}),
         "tool_run": frozenset({"private"}) if task_evidence_allowed else frozenset(),
         "lore_section": frozenset({"public"}),
     }

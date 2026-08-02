@@ -1,5 +1,7 @@
 # 遐蝶 KFC 能力归属与陪伴交互增强专项计划
 
+> 助手优先改造声明（2026-08-01）：CIE 的消息积累、生成取消、图片、回复节奏和 ContextContribution 完整保留；删除对 LIFE 心理状态、LifeEvent、PersonalGoal 和 SelfTimeline 的读取。ShortMemo 改由 Task/CTX/MEM 提供。KFC 仅是参考包名称，Xiadie 的实现专项仍为 CIE。
+
 - 计划代号：CIE（Companion Interaction Enhancement）
 - 版本：v0.2
 - 日期：2026-07-28
@@ -11,12 +13,12 @@
 
 吸收 KokoroFlow Chatter（KFC）适合陪伴体验的产品思想，并把本地开源包作为 CIE 设计与施工时的只读代码参考。KFC 使用 AGPL-3.0；遐蝶默认采用独立设计与实现，任何源码级复用都必须先完成许可证兼容性决策。
 
-CIE 关注“用户如何连续地与遐蝶交互”，不重建已经冻结的 CTX、EAP、CDS、LIFE 或 KIG 领域内核。它必须复用：
+CIE 关注“用户如何连续地与遐蝶交互”，不重建已经冻结的 CTX、EAP、CDS 或 KIG 领域内核。助手优先路线下它必须复用：
 
 - CTX 的硬预算、滚动摘要和来源分层；
 - EAP 的 Presence、候选、最终授权、表达、投递与反馈账本；
 - CDS 的 DecisionKindRegistry、模型路由、预算、取消和来源复核；
-- LIFE 的生活连续性、短期意图与结构化心理状态；
+- Task/CTX/MEM 提供的近期任务、ShortMemo 与真实连续性；
 - KIG 的跨源权限、新鲜度、证据与外部贡献治理。
 
 ## 2. 当前覆盖基线
@@ -25,9 +27,9 @@ CIE 关注“用户如何连续地与遐蝶交互”，不重建已经冻结的 
 
 | KFC 核心能力 | 当前覆盖 | 唯一所有者 | 决策 |
 |---|---:|---|---|
-| 心理活动流 | 60% | LIFE/EAP 现有状态；专用持久对象归未来 LIFE v2 | CIE 只读现有结构化来源；不新增 InnerStateEvent，不保存完整内心独白或 chain-of-thought |
+| 心理活动流 | 退役 | 无 | 不保存 InnerStateEvent、InnerStateProjection、完整内心独白或 chain-of-thought |
 | 近期记忆压缩 | 90% | CTX | 保持 `conversation-summary-v1`；不以第一人称虚构事实 |
-| 私人备忘录 | 0% | LIFE v2 候选 | LIFE v1 未实现 ShortMemo；不作为 CIE 前置条件，也不得由 CIE 越权补建 |
+| 近期备忘录 | 已实现 | Task/CTX/MEM 的单写 ShortMemo 服务 | CIE 只消费治理后的相关近期事项，不创建第二套备忘录 |
 | 等待与超时 | 80% | EAP | 复用 Presence/open thread/due/expiry；只在发现真实缺口时提 `proactive-decision-v3` |
 | 主动发起 | 95% | EAP | 不重建；继续由最终硬门、投递和反馈状态机裁决 |
 | 消息积累窗口 | 0% | CIE | CIE 新建 TurnIngressBuffer，不改长期记忆或 EAP 候选 |

@@ -14,7 +14,6 @@ PROACTIVE_KINDS = (
     "milestone_followup",
     "chat_continuation",
     "casual_greeting",
-    "life_share",
 )
 
 

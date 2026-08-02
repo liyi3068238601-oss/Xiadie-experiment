@@ -26,7 +26,6 @@ const PROACTIVE_SETTING_KEYS = [
   "proactive_kind_emotional_care_enabled",
   "proactive_kind_milestone_followup_enabled",
   "proactive_kind_casual_greeting_enabled",
-  "proactive_kind_life_share_enabled",
   "proactive_quiet_hours_start",
   "proactive_quiet_hours_end",
   "proactive_frequency_mode",
@@ -44,7 +43,6 @@ const PROACTIVE_DEFAULTS: Record<string, string> = {
   proactive_kind_emotional_care_enabled: "1",
   proactive_kind_milestone_followup_enabled: "1",
   proactive_kind_casual_greeting_enabled: "1",
-  proactive_kind_life_share_enabled: "1",
   proactive_quiet_hours_start: "23",
   proactive_quiet_hours_end: "9",
   proactive_frequency_mode: "restrained",
@@ -1598,7 +1596,6 @@ export function SettingsPage({ onModelChanged, currentSessionId }: {
                     { key: "proactive_kind_emotional_care_enabled", label: "情绪关心" },
                     { key: "proactive_kind_milestone_followup_enabled", label: "里程碑跟进" },
                     { key: "proactive_kind_casual_greeting_enabled", label: "普通问候" },
-                    { key: "proactive_kind_life_share_enabled", label: "LIFE 分享" },
                   ].map((item) => (
                     <label key={item.key} className="settings-toggle-row">
                       <span>{item.label}</span>
@@ -1834,10 +1831,10 @@ export function SettingsPage({ onModelChanged, currentSessionId }: {
                 <div className="settings-card-title-row">
                   <span className="settings-card-title">重置与清除</span>
                 </div>
-                <p className="settings-card-hint">清除候选与主动历史；聊天、记忆、关系与 LIFE 数据都会保留。</p>
+                <p className="settings-card-hint">清除候选与主动历史；聊天、记忆与关系数据都会保留。</p>
                 <div className="settings-data-actions">
                   <button className="btn ghost" onClick={() => {
-                    if (!window.confirm("清除全部主动候选与历史？聊天、记忆、关系和 LIFE 数据会保留。")) return;
+                    if (!window.confirm("清除全部主动候选与历史？聊天、记忆和关系数据会保留。")) return;
                     api.clearProactiveData()
                       .then(() => { toast("已清除主动候选与历史"); loadProactiveSettings(); })
                       .catch((e) => toast(e.message || "清除失败"));

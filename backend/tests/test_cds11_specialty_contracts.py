@@ -21,7 +21,7 @@ def _sha(value: str) -> str:
 def _domain_snapshot() -> dict[str, list[tuple]]:
     tables = (
         "conversation_presence", "proactive_candidates", "proactive_decisions",
-        "proactive_deliveries", "proactive_feedback", "life_proactive_seeds",
+        "proactive_deliveries", "proactive_feedback",
     )
     conn = db.connect()
     try:
@@ -65,18 +65,12 @@ def _completed_presence_run():
     return run.id
 
 
-def test_life_revisions_are_sources_and_kig_objects_are_validated_candidates():
-    life_source: contracts.RevisionRef = {
-        "kind": "life_event", "id": "life-1", "revision": "3", "content_hash": _sha("life"),
-    }
-    contracts.validate_revision_ref(life_source)
-    with pytest.raises(ValueError, match="sources, not shared candidates"):
-        contracts.validate_candidate_envelope({
-            "id": "candidate-life", "source": life_source,
-            "candidate_kind": "life_share", "candidate_revision": "1",
-            "content_hash": _sha("candidate-life"),
+def test_only_governed_kig_objects_are_validated_candidates():
+    with pytest.raises(ValueError, match="source kind is not registered"):
+        contracts.validate_revision_ref({
+            "kind": "retired_source", "id": "old-1", "revision": "3",
+            "content_hash": _sha("old"),
         })
-
     knowledge_source: contracts.RevisionRef = {
         "kind": "knowledge_object", "id": "knowledge-1", "revision": "7",
         "content_hash": _sha("knowledge"),
@@ -131,24 +125,20 @@ def test_narrative_planner_is_background_only_and_offline_exit_never_runs_it():
     )
 
 
-def test_life_and_contact_event_identity_is_revision_bound_and_idempotent():
+def test_contact_event_identity_is_revision_bound_and_idempotent():
     first = contracts.event_idempotency_key(
-        event_kind="life_event", event_id="event-1", revision="4",
+        event_kind="contact_event", event_id="event-1", revision="4",
     )
     assert first == contracts.event_idempotency_key(
-        event_kind="life_event", event_id="event-1", revision="4",
+        event_kind="contact_event", event_id="event-1", revision="4",
     )
     assert first != contracts.event_idempotency_key(
-        event_kind="life_event", event_id="event-1", revision="5",
+        event_kind="contact_event", event_id="event-1", revision="5",
     )
-    contact = contracts.event_idempotency_key(
-        event_kind="contact_event", event_id="episode-1", revision="4",
-    )
-    assert contact != first
     assert contracts.event_idempotency_key(
-        event_kind="life_event", event_id="event:1", revision="4",
+        event_kind="contact_event", event_id="event:1", revision="4",
     ) != contracts.event_idempotency_key(
-        event_kind="life_event", event_id="event", revision="1:4",
+        event_kind="contact_event", event_id="event", revision="1:4",
     )
 
 

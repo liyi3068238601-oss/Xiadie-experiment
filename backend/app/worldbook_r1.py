@@ -14,7 +14,7 @@ from . import db
 WORLD_BOOK_PATH = Path(__file__).with_name("knowledge") / "xiadie_worldbook_r1.json"
 PROTOCOL_VERSION = "worldbook-r1"
 SOURCE_GATE_VERSION = "worldbook-source-gate-v1"
-ROLLOUT_KEY = "life.worldbook_r1.rollout_mode"
+ROLLOUT_KEY = "assistant.worldbook_r1.rollout_mode"
 ROLLOUT_MODES = ("off", "shadow", "active")
 MAX_SECTIONS = 3
 MAX_CHARS = 3600

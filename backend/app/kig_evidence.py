@@ -18,7 +18,7 @@ CLAIM_SUPPORT_PROTOCOL_VERSION = "claim-support-v1"
 MAX_EVIDENCE = 12
 MAX_PROMPT_CHARS = 18_000
 SOURCE_KINDS = frozenset({
-    "message", "memory_fragment", "life_event", "tool_run", "lore_section",
+    "message", "memory_fragment", "tool_run", "lore_section",
 })
 SUPPORT_STATES = frozenset({
     "supported", "partially_supported", "conflicted", "insufficient", "not_checkable",
@@ -331,7 +331,7 @@ def evidence_link_public(row) -> dict:
     item = dict(row)
     item["content_fingerprint"] = item["excerpt_hash"][:12]
     item["source_label"] = {
-        "message": "原对话", "memory_fragment": "记忆", "life_event": "生活记录",
+        "message": "原对话", "memory_fragment": "记忆",
         "tool_run": "工具记录", "lore_section": "角色设定",
     }.get(item["source_kind"], "来源")
     item["available"] = _row_current(item)
@@ -462,11 +462,6 @@ def _source_content(source_kind: str, source_id: str) -> str | None:
             "memory_fragment": (
                 "SELECT content FROM memory_fragments WHERE id=? AND status='active' AND enabled=1",
                 "content",
-            ),
-            "life_event": (
-                "SELECT r.summary AS content FROM life_events e JOIN life_event_revisions r "
-                "ON r.event_id=e.id AND r.revision=e.current_revision "
-                "WHERE e.id=? AND e.lifecycle_status='active'", "content",
             ),
             "tool_run": ("SELECT summary AS content FROM tool_logs WHERE id=? AND status='done'", "content"),
         }

@@ -15,7 +15,7 @@ from . import db, lore
 
 SOURCE_KINDS = frozenset({
     "knowledge_document", "knowledge_chunk", "message", "memory_fragment",
-    "life_event", "tool_run", "lore_section",
+    "tool_run", "lore_section",
 })
 DERIVED_KINDS = frozenset({
     "retrieval_bundle", "evidence_link", "information_item", "pwm_claim",
@@ -32,7 +32,6 @@ _KNOWLEDGE_POLICIES = frozenset({"remote_allowed", "ask_each_time", "local_only"
 _PRIVACY_SCOPES = {
     "message": frozenset({"private"}),
     "memory_fragment": frozenset({"normal", "sensitive"}),
-    "life_event": frozenset({"private"}),
     "tool_run": frozenset({"private"}),
     "lore_section": frozenset({"public"}),
 }
@@ -177,27 +176,6 @@ def _memory(source_id: str) -> SourceRef:
                      content_hash, status, row["sensitivity"], f"memory://fragments/{source_id}")
 
 
-def _life_event(source_id: str) -> SourceRef:
-    conn = db.connect()
-    try:
-        row = conn.execute(
-            "SELECT e.id,e.event_kind,e.world_layer,e.lifecycle_status,e.current_revision,"
-            "r.summary,r.attributes_json FROM life_events e JOIN life_event_revisions r "
-            "ON r.event_id=e.id AND r.revision=e.current_revision WHERE e.id=?", (source_id,),
-        ).fetchone()
-    finally:
-        conn.close()
-    if not row:
-        raise _missing("life_event", source_id)
-    content_hash = _canonical_hash({
-        "event_kind": row["event_kind"], "world_layer": row["world_layer"],
-        "summary": row["summary"], "attributes": json.loads(row["attributes_json"]),
-    })
-    status = "active" if row["lifecycle_status"] == "active" else "revoked"
-    return SourceRef("life_event", source_id, str(row["current_revision"]), content_hash,
-                     status, "private", f"life://events/{source_id}")
-
-
 def _tool_run(source_id: str) -> SourceRef:
     conn = db.connect()
     try:
@@ -253,7 +231,7 @@ class SourceAdapterRegistry:
 registry = SourceAdapterRegistry()
 for _kind, _resolver in {
     "knowledge_document": _document, "knowledge_chunk": _chunk, "message": _message,
-    "memory_fragment": _memory, "life_event": _life_event, "tool_run": _tool_run,
+    "memory_fragment": _memory, "tool_run": _tool_run,
     "lore_section": _lore_section,
 }.items():
     registry.register(_kind, _resolver)

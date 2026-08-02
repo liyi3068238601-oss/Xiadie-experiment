@@ -1,4 +1,4 @@
-"""Proposal-only KIG integration contracts for MEM, Episode, Saga and LIFE.
+"""Proposal-only KIG integration contracts for MEM, Episode and Saga.
 
 The owner system is always the sole writer.  These adapters expose typed,
 bounded proposals or read-only SourceRef envelopes and never mutate owner rows.
@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from . import db, kig_sources, self_timeline
+from . import db, kig_sources
 
 PROTOCOL_VERSION = "kig-system-proposal-v1"
 PROPOSAL_TARGETS = {
@@ -117,13 +117,6 @@ def decide_proposal(proposal_id: str, *, accepted: bool, owner_system: str) -> d
     return get_proposal(proposal_id)
 
 
-def life_timeline_readonly(query: str, *, limit: int = 8) -> list[dict]:
-    """Read the LIFE v1 SelfTimeline projection without writing any LIFE state."""
-    if not _setting_enabled("life_enabled", default=True):
-        return []
-    return self_timeline.search(query, limit=max(1, min(limit, 20)))
-
-
 def tool_run_source(tool_run_id: str) -> dict:
     ref = kig_sources.registry.resolve("tool_run", tool_run_id)
     return ref.to_dict()
@@ -193,8 +186,6 @@ def source_allowed(*, source: str, temporary_chat: bool = False) -> bool:
         ) != "off"
     if source == "memory":
         return _setting_enabled("memory_enabled", default=True) and not temporary_chat
-    if source == "life":
-        return _setting_enabled("life_enabled", default=True)
     if source == "knowledge":
         return _setting_value("knowledge_recall_mode", "explicit") != "off"
     return source in {"task", "lore"}

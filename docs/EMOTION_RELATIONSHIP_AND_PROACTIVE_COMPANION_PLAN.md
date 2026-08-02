@@ -1,5 +1,7 @@
 # 遐蝶完整情感、关系积温与主动陪伴专项施工计划
 
+> 助手优先改造声明（2026-08-01）：EAP 的 Presence、候选、授权、频率、投递、反馈和取消基础设施保留；持久生活化 Affect、关系数值推动的追逐和全部 LIFE seed 退役。主动来源改为 Task、Reminder、Commitment、ImportantDate、ToolResult、OpenThread 和有当前轮证据的 EmotionalCare。旧生活化产品结论仅作历史记录。
+
 - 版本：v0.3（完成度审计与收口补完版）
 - 日期：2026-07-22
 - 状态：EAP.R0～EAP.R6 已完成并通过独立 strict Review；EAP v1 协议与 Schema 60 已正式冻结

@@ -1,9 +1,11 @@
 # 遐蝶桌面 Agent 长期开发路线
 
-> 文档状态：当前长期执行依据  
-> 起点版本：v0.1.0  
-> 目标形态：安全、可控、可扩展的本地优先桌面伴侣 Agent  
+> 文档状态：助手优先长期执行依据
+> 起点版本：v0.1.0
+> 目标形态：安全、可控、可扩展的本地优先桌面通用 Agent
 > 更新规则：每完成一个小版本，必须同步更新本文件中的状态、验收结果和下一阶段入口。
+
+> 2026-08-01 路线修订：LIFE 生活模拟已退役，不再作为长期候选或可选 Profile。当前先执行 `ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md` 的 RETIRE.0～RETIRE.4，再推进 Task、ToolRegistry、Web/Research、文件与办公工具。本文较早的 LIFE/LIFE v2 内容只保留历史记录。
 
 ## 0. 这份文档解决什么问题
 
@@ -27,6 +29,8 @@
 ### 1.1 一句话定位
 
 遐蝶是一个常驻 Windows 桌面的 AI 伴侣 Agent：她能理解用户意图、记住重要信息、规划任务、调用受控工具、处理本地资料、生成可追溯产物，并在有风险的动作前请求确认。
+
+“伴侣”描述人格和交互体验，不表示产品需要模拟角色离线生活。连续性来自真实对话、记忆、任务、日期、项目和工具结果。
 
 ### 1.2 最终用户体验
 
@@ -589,16 +593,16 @@ Artifact
 
 ---
 
-## 14A. v0.4.2：记忆星座与伴侣状态
+## 14A. v0.4.2：记忆星座与交互边界
 
 本阶段融合 [jiwen](https://github.com/ClaraShafiq/jiwen) 的连续状态思路与 [MemoryConstellations](https://github.com/ClaraShafiq/MemoryConstellations) 的分层记忆组织。详细边界与交付顺序见 `docs/JIWEN_MEMORY_CONSTELLATIONS_INTEGRATION.md` 和 ADR-0002。
 
-### 14A.1 伴侣状态
+### 14A.1 当轮表达与关系边界
 
-- 使用 connection、pride、valence、arousal、immersion 五个有界维度。
-- 状态只影响语气，不影响事实判断、工具权限和安全策略。
-- 先支持对话内状态变化；主动联系必须等待调度、通知和权限能力成熟。
-- 用户能够查看、重置和关闭状态影响。
+- 只在当前请求内理解用户状态并生成有界表达指导。
+- Relationship 只保存由真实互动支持的称呼、距离、信任和边界。
+- 不跨轮模拟遐蝶心境，不进行离线情绪漂移或联系需求积温。
+- 表达指导不能影响事实判断、工具权限和安全策略。
 
 ### 14A.2 记忆星座
 
@@ -608,22 +612,21 @@ Artifact
 - 星图是数据的可视化入口，不替代列表、搜索、纠正和删除能力。
 - 归档和合并必须可审计、可撤销，并受模型调用预算限制。
 
-### 14A.3 LIFE v2 长期候选基线
+### 14A.3 Persona、WorldBook 与 ShortMemo 新归属
 
-本节原为 LIFE v2 候选登记；CIE v1 已于 2026-07-29 冻结，随后专项审计已完成。以下是当前计划结论，仍不代表运行时已实现：
+本节原为 LIFE v2 候选登记，已被 2026-08-01 助手优先路线取代：
 
-- 持久化 `structured-inner-state-v1` / `InnerStateEvent` 正式取消。首版只从现有 Affect、Relationship、Goal/Saga、LIFE 事件和相关 ShortMemo 确定性生成当轮只读 `inner-state-projection-v1`；无迁移、无缓存、无反向写回，不保存完整内心独白或 chain-of-thought。
-- `short-memo-v1` / `ShortMemo` 已确认立项：保存限长、带来源快照与 1 小时～14 天 TTL 的最小化近期备忘，默认 72 小时，当前单本机档案最多 10 条、相关时最多召回 3 条。用户开启总开关后允许静默创建，但秘密值与模型推断敏感事实永不入库；不自动晋升 Memory、Goal、ImportantDate 或 Task。
-- Schema 82 只分配给 ShortMemo；Persona、WorldBook 与 InnerStateProjection 不占迁移。首次迁移后发布门保持 Shadow，不写正式备忘、不召回，专项 Review 通过后才允许启用。
-- LIFE v2 v0.3 construction candidate 还包括 Persona 真实模型基线、可回退编译协议和 WorldBook r1 轨道，详见 `docs/LIFE_V2_PERSONA_AND_SHORT_MEMORY_PLAN.md`。首发由用户明确选择陪伴/工作模式；Cyrene WorldBook 只参考条目元数据、别名和单层关联，Lore/KIG/CTX 的正文、来源治理和预算所有权不变。
-- 计划独立 Review 通过后按 `LIFE2.0 → LIFE2.1 → LIFE2.2A → LIFE2.2B → LIFE2.3 → LIFE2.4A → LIFE2.4B → LIFE2.5 → LIFE2.6` 逐段施工；未实施或仍为 Shadow 的能力不得宣称完成。
+- Persona 编译器、模型认证、Chat/Work 模式和 WorldBook 保留，归 Persona/Lore。
+- `short-memo-v1` 保留限长、来源、TTL、敏感信息硬门和用户控制，归 Task/CTX/MEM。
+- `inner-state-projection-v1`、Goal/LIFE Event 表达投影和 LIFE v2 名义全部退役。
+- 详细迁移见 `ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md`。
 
 ### 14A.4 本版本验收
 
-- 状态跨重启保存、始终在合法范围内，关闭后不再进入提示。
+- 当前轮表达指导不跨请求持久化。
 - 自动记忆均有来源，敏感候选不会静默永久保存。
 - 星图节点能定位到真实内容，删除后不会留下可召回的派生数据。
-- 主动联系默认关闭，并具备安静时段、次数上限和一键暂停。
+- 主动帮助只由任务、提醒、承诺、重要日期、工具结果或 OpenThread 触发，并具备安静时段、次数上限和一键暂停。
 
 ---
 

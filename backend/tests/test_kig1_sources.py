@@ -3,7 +3,7 @@ import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
-from app import db, kig_sources, knowledge, knowledge_worker, life_events, lore, memory
+from app import db, kig_sources, knowledge, knowledge_worker, lore, memory
 from app.main import app
 
 TOKEN = "test-token-with-at-least-thirty-two-bytes"
@@ -53,25 +53,19 @@ def _seed_sources() -> dict[str, str]:
         conn.close()
 
     fragment = memory.create_memory("L1", "memory authority")
-    source = life_events.SourceRef("system_observation", db.new_id(), "1", "a" * 64)
-    event, created = life_events.create_event(
-        event_kind="observation", world_layer="observed", summary="life authority",
-        source_refs=(source,), idempotency_key=f"kig-test:{db.new_id()}",
-    )
-    assert created
     section = lore._sections()[0]
     lore_id = kig_sources._sha256(section["title"])
     return {
         "knowledge_document": document_id, "knowledge_chunk": chunk_id,
         "message": message_id, "memory_fragment": fragment["id"],
-        "life_event": event["id"], "tool_run": tool_id, "lore_section": lore_id,
+        "tool_run": tool_id, "lore_section": lore_id,
     }
 
 
 def test_schema_72_has_only_minimal_dependency_metadata():
     conn = db.connect()
     try:
-        assert conn.execute("SELECT value FROM schema_meta WHERE key='schema_version'").fetchone()[0] == "82"
+        assert conn.execute("SELECT value FROM schema_meta WHERE key='schema_version'").fetchone()[0] == "84"
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(derived_dependencies)")}
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     finally:

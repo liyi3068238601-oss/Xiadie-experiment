@@ -1,4 +1,6 @@
-# LIFE v2：人格提示词、短期备忘与请求内状态投影计划
+# Persona、WorldBook 与 ShortMemo 历史施工计划（原 LIFE v2）
+
+> **专项拆分与退役（2026-08-01）**：Persona 编译、模型认证、Chat/Work 模式和 WorldBook 保留并归 Persona/Lore；ShortMemo 保留并迁入 Task/CTX/MEM；`inner-state-projection-v1` 与 LIFE v2 名义退役。本文只作为这些能力的历史施工记录，后续实现以助手优先退役计划和 Cyrene 长期路线为准。
 
 - 版本：v0.3 frozen
 - 日期：2026-07-29

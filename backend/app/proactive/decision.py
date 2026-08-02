@@ -107,7 +107,6 @@ KIND_BASE_DRIVE = {
     "milestone_followup": 0.7,
     "chat_continuation": 0.5,
     "casual_greeting": 0.3,
-    "life_share": 0.6,
 }
 
 
@@ -896,7 +895,6 @@ def decide_candidate(
         "emotional_care": 0.9,
         "milestone_followup": 0.85,
         "return_followup": 0.8,
-        "life_share": 0.7,
         "chat_continuation": 0.5,
         "casual_greeting": 0.3,
     }

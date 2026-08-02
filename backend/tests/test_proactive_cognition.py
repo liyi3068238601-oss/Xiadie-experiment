@@ -413,7 +413,7 @@ def test_regenerated_reply_revokes_old_meaning_and_recalculates(monkeypatch):
         asyncio.run(cognition_service.process_due(limit=20))
     final = repository.get_snapshot(advance_time=False)
     assert final["relationship"]["bond"] == pytest.approx(baseline)
-    assert final["relationship"]["interaction_count"] == 1
+    assert final["relationship"]["interaction_count"] == 0
     conn = db.connect()
     try:
         statuses = [row[0] for row in conn.execute(

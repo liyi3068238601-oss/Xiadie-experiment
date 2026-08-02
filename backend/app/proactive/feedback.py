@@ -28,7 +28,6 @@ NATURAL_REASONS = {
     "milestone_followup": "想起了我们共同经历的一个节点",
     "chat_continuation": "想延续刚才没有说完的话题",
     "casual_greeting": "隔了一段时间，想轻轻问候一下",
-    "life_share": "想和你分享一件生活里的小事",
 }
 
 

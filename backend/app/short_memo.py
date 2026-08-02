@@ -1,4 +1,4 @@
-"""LIFE2 ShortMemo: bounded, silent, source-backed near-term continuity."""
+"""Assistant ShortMemo: bounded, source-backed near-term task continuity."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -89,29 +89,29 @@ def rollout_snapshot(conn=None) -> RolloutSnapshot:
     try:
         rows = {
             row["key"]: row["value"] for row in connection.execute(
-                "SELECT key,value FROM settings WHERE key LIKE 'life.short_memo.%'"
+                "SELECT key,value FROM settings WHERE key LIKE 'assistant.short_memo.%'"
             )
         }
-        rollout = rows.get("life.short_memo.rollout_mode", "shadow")
+        rollout = rows.get("assistant.short_memo.rollout_mode", "shadow")
         if rollout not in ROLLOUT_MODES:
             rollout = "off"
         return RolloutSnapshot(
-            enabled=rows.get("life.short_memo.enabled", "1") == "1",
+            enabled=rows.get("assistant.short_memo.enabled", "1") == "1",
             rollout_mode=rollout,
-            rollout_epoch=max(0, _int(rows.get("life.short_memo.rollout_epoch"), 0)),
+            rollout_epoch=max(0, _int(rows.get("assistant.short_memo.rollout_epoch"), 0)),
             remote_extraction_enabled=(
-                rows.get("life.short_memo.remote_extraction_enabled", "0") == "1"
+                rows.get("assistant.short_memo.remote_extraction_enabled", "0") == "1"
             ),
             default_ttl_seconds=_bounded(
-                _int(rows.get("life.short_memo.default_ttl_seconds"), DEFAULT_TTL),
+                _int(rows.get("assistant.short_memo.default_ttl_seconds"), DEFAULT_TTL),
                 MIN_TTL, MAX_TTL,
             ),
             max_active=_bounded(
-                _int(rows.get("life.short_memo.max_active"), HARD_MAX_ACTIVE),
+                _int(rows.get("assistant.short_memo.max_active"), HARD_MAX_ACTIVE),
                 1, HARD_MAX_ACTIVE,
             ),
             max_recall=_bounded(
-                _int(rows.get("life.short_memo.max_recall"), HARD_MAX_RECALL),
+                _int(rows.get("assistant.short_memo.max_recall"), HARD_MAX_RECALL),
                 1, HARD_MAX_RECALL,
             ),
         )
@@ -129,14 +129,14 @@ def update_product_settings(
     conn = db.connect()
     try:
         if enabled is not None:
-            _set_locked(conn, "life.short_memo.enabled", "1" if enabled else "0")
+            _set_locked(conn, "assistant.short_memo.enabled", "1" if enabled else "0")
         if remote_extraction_enabled is not None:
             _set_locked(
-                conn, "life.short_memo.remote_extraction_enabled",
+                conn, "assistant.short_memo.remote_extraction_enabled",
                 "1" if remote_extraction_enabled else "0",
             )
         if default_ttl_seconds is not None:
-            _set_locked(conn, "life.short_memo.default_ttl_seconds", str(default_ttl_seconds))
+            _set_locked(conn, "assistant.short_memo.default_ttl_seconds", str(default_ttl_seconds))
         conn.commit()
         return rollout_snapshot(conn)
     finally:
@@ -151,8 +151,8 @@ def set_rollout_mode(mode: str) -> RolloutSnapshot:
     try:
         current = rollout_snapshot(conn)
         if current.rollout_mode != mode:
-            _set_locked(conn, "life.short_memo.rollout_mode", mode)
-            _set_locked(conn, "life.short_memo.rollout_epoch", str(current.rollout_epoch + 1))
+            _set_locked(conn, "assistant.short_memo.rollout_mode", mode)
+            _set_locked(conn, "assistant.short_memo.rollout_epoch", str(current.rollout_epoch + 1))
         conn.commit()
         return rollout_snapshot(conn)
     finally:

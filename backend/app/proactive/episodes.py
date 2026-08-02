@@ -71,7 +71,7 @@ class OriginType:
     EXPECTED_RETURN = "expected_return"    # 用户离开时可预期回来（如"我去测试"）
     EMOTIONAL_CARE = "emotional_care"      # 情感关怀
     MILESTONE = "milestone"                # 里程碑事件
-    LIFE_SHARE = "life_share"              # LIFE 生活事件分享
+    CASUAL_GREETING = "life_share"         # Schema 清理前的兼容存储值
 
 
 # 最终结果（spec 第 5.7 节 outcome 字段）
@@ -176,7 +176,7 @@ def create_episode(
         OriginType.EXPECTED_RETURN,
         OriginType.EMOTIONAL_CARE,
         OriginType.MILESTONE,
-        OriginType.LIFE_SHARE,
+        OriginType.CASUAL_GREETING,
     }
     if origin_type not in valid_origins:
         raise ValueError(f"invalid origin_type: {origin_type!r}")

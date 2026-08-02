@@ -21,7 +21,7 @@ def isolated_feedback_runtime():
             "proactive_delivery_events", "proactive_delivery_attempts", "proactive_deliveries",
             "expression_plans", "proactive_intensity_plans", "proactive_decisions",
             "proactive_candidate_claims", "proactive_runtime_sagas", "proactive_runtime_sources",
-            "proactive_candidates", "life_proactive_seeds", "contact_episodes", "messages", "sessions",
+            "proactive_candidates", "contact_episodes", "messages", "sessions",
         ):
             conn.execute(f"DELETE FROM {table}")
         conn.commit()
@@ -55,7 +55,7 @@ def _delivered(monkeypatch, *, level=3, now=None):
         session_id=session_id, source_kind=orchestrator.SOURCE_CASUAL_GREETING,
         source_ref_id=assistant_id, source_revision=revision, source_hash=source_hash,
         payload={"topic": "回来时和我说一声", "open_thread": None,
-                 "origin_type": episodes.OriginType.LIFE_SHARE,
+                 "origin_type": episodes.OriginType.CASUAL_GREETING,
                  "candidate_kind": candidates.CandidateKind.CASUAL_GREETING},
         due_at=now, expires_at=now + 3600, now=now - 1,
     )

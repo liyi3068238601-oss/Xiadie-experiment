@@ -1,8 +1,10 @@
 # 遐蝶 LIFE 生活连续性专项施工计划
 
+> **专项退役（2026-08-01）**：本计划不再是 `Xiadie-experiment` 的现行产品规范。LifeClock、SelfState、离线世界续演、模拟日程、个人目标、日记、SelfTimeline 和 LIFE Event 生产将按 `ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md` 物理删除。本文仅保留历史实现、Schema 和验收证据，不得据此新增或恢复 LIFE 能力。
+
 - 版本：v0.3（施工基线、单写者、真实性与长期治理补强）
 - 日期：2026-07-22
-- 状态：CDS PR #2 已合并，LIFE.0 从 `main@0d7a2d08dc07f123d016da26da117fa58f9a48a1` 开工
+- 状态：历史专项已完成后退役；实验版进入 RETIRE.0～RETIRE.5
 - 专项代号：`LIFE`（Life, Inference, Feedback and Existence）
 - 适用范围：连续自我状态、每日生活日程、离线世界续演、重要日期、日记、自我时间线及其与记忆、情绪、关系和主动陪伴的编排；共享 LLM 决策治理由前置 `CDS` 提供
 - 关联专项：`CTX` 对话上下文、会话摘要与跨会话回忆；`EAP` 完整情感、关系积温与主动陪伴；`CDS` 共享认知决策协议与运行时

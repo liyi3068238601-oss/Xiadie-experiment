@@ -320,7 +320,7 @@ def test_layer1_topic_rejected_blocks():
     db.set_setting("proactive_rejected_topics", "敏感话题")
     try:
         candidate = candidates_mod.create_candidate(
-            session_id, candidate_kind=CandidateKind.LIFE_SHARE,
+            session_id, candidate_kind=CandidateKind.CASUAL_GREETING,
             topic="敏感话题",
             source_messages=[{"id": "m1", "role": "user", "content": "x"}],
         )
@@ -1092,7 +1092,6 @@ def test_disabled_proactive_zero_send():
             CandidateKind.EMOTIONAL_CARE,
             CandidateKind.MILESTONE_FOLLOWUP,
             CandidateKind.CASUAL_GREETING,
-            CandidateKind.LIFE_SHARE,
         ]:
             candidate = _make_candidate(session_id, candidate_kind=kind)
             d = decide_candidate(candidate.id)
@@ -1162,7 +1161,7 @@ def test_hard_boundary_100_percent_block():
         # 3. TOPIC_REJECTED
         db.set_setting("proactive_rejected_topics", "敏感")
         c = candidates_mod.create_candidate(
-            session_id, candidate_kind=CandidateKind.LIFE_SHARE,
+            session_id, candidate_kind=CandidateKind.CASUAL_GREETING,
             topic="敏感",
             source_messages=[{"id": "m1", "role": "user", "content": "x"}],
         )
@@ -1283,7 +1282,7 @@ def test_schema_version_is_52():
         row = conn.execute(
             "SELECT value FROM schema_meta WHERE key='schema_version'"
         ).fetchone()
-        assert row[0] == "82"
+        assert row[0] == "84"
     finally:
         conn.close()
 
@@ -1316,13 +1315,13 @@ def test_proactive_decisions_table_exists():
         conn.close()
 
 
-def test_proactive_candidates_has_6_kinds():
-    """CHECK 约束允许 6 种 candidate_kind。"""
+def test_proactive_candidates_has_5_kinds():
+    """运行时只暴露 5 种有真实来源的 candidate_kind。"""
     db.init_db()
     session_id = db.new_id()
     _setup_session(session_id)
     valid_kinds = list(candidates_mod.ALL_CANDIDATE_KINDS)
-    assert len(valid_kinds) == 6
+    assert len(valid_kinds) == 5
     conn = db.connect()
     try:
         now = db.now()

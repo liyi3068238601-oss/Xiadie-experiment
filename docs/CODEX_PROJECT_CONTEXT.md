@@ -1,10 +1,10 @@
 # 遐蝶 Codex 项目上下文
 
-> LIFE v2 施工快照（2026-07-30）：LIFE2.0～LIFE2.6 已完成。`persona-profile-v2.2` 已收口真实聊天中的动作旁白、虚构当前天气/光线/即时活动，以及普通反问被 KIG 改写为“资料不足”的回归。Smart Recall 与 KIG 对聊天邀请确定性跳过，证据门不再把问句视为事实声明；`persona-natural-dialogue-guard-v2` 绑定 DeepSeek 三轮 150/150 生产等价证书。模型指纹或输出门协议不匹配仍 fail closed 回退旧 Persona。WorldBook r1、ShortMemo 与 InnerStateProjection 均保持 Shadow，旧 Lore 尚未替换。总体验收见 `docs/reports/life2-final-review.md`。
+> 助手优先路线更新（2026-08-01）：`Xiadie-experiment` 已决定退役并物理移除 LIFE 生活模拟。Persona、WorldBook 和 ShortMemo 中有通用价值的部分继续保留，但 ShortMemo 迁入 Task/CTX/MEM，InnerStateProjection 删除。现行最高优先级规范为 `docs/ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md`；LIFE v1/v2 文档仅保留历史施工证据。
 
 > 状态：当前执行约束  
 > 适用对象：Codex、维护者和后续参与开发的协作者  
-> 项目根目录：`E:\Xiadie\Xiadie`  
+> 项目根目录：`E:\Xiadie\Xiadie-experiment`
 > 当前产品基线：v0.1.0  
 > 最后更新：2026-07-29
 
@@ -27,7 +27,7 @@
 
 ## 2. 产品定位
 
-遐蝶是一个本地优先、常驻 Windows 桌面的 AI 伴侣 Agent。
+遐蝶是一个本地优先、常驻 Windows 桌面的助手优先 Agent。她保留稳定角色人格和自然陪伴表达，但主要职责是完成检索、分析、写作、编程、任务管理与受控工具执行，而不是模拟离线生活。
 
 当前阶段首先保证：
 
@@ -57,14 +57,13 @@
 发生冲突时，按照以下顺序判断：
 
 1. 用户在当前任务中的明确指令。
-2. 本文件。
-3. `docs/XIADIE_LONG_TERM_ROADMAP.md`。
-4. 仓库内已接受的 ADR。
-5. `遐蝶Agent_v0.2UI回归与Cyrene风格融合迁移方案_v0.6.1`。
-6. `遐蝶桌面Agent_UI设计规格书_Cyrene融合回归版_v0.3.1`。
-7. `遐蝶桌面Agent_Cyrene路线版总体设计与开发计划_v0.5.1`。
-8. `遐蝶Agent_Codex_PR拆分执行计划_v0.6.2`。
-9. 旧版 UI、多 Agent 和长期路线文档只作细节及远期参考。
+2. `docs/ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md`。
+3. `docs/CYRENE_STYLE_AGENT_EXPERIMENT_PLAN.md`。
+4. 本文件。
+5. `docs/XIADIE_LONG_TERM_ROADMAP.md`。
+6. 仓库内已接受且未被助手优先路线取代的 ADR。
+7. MEM、CTX、Knowledge、EAP、CDS、KIG、CIE、Persona 专项中未冲突的部分。
+8. LIFE v1/v2、旧 Affect/EAP 生活化段落和旧多 Agent 文档只作历史参考。
 
 设计文档的 v0.3、v0.5、v0.6 是文档修订号，不是应用发布版本。应用版本从当前 v0.1.0 继续推进。
 
@@ -76,7 +75,8 @@
 - 对话上下文 CTX.0～CTX.7：`docs/CONVERSATION_CONTEXT_AND_SUMMARY_PLAN.md`。该计划已完成总验收并通过独立 strict review；
   schema 45 与上下文 v1 已冻结，普通自动历史召回继续 shadow。
 - 已关闭专项：`docs/EMOTION_RELATIONSHIP_AND_PROACTIVE_COMPANION_PLAN.md` 第 9.B 节 EAP.R0～EAP.R6。Schema 48～60 与六个 EAP 协议已通过独立 strict review 并正式冻结；不得另建重复情绪、关系或主动投递源。
-- 已关闭专项：`docs/LLM_DECISION_AND_LIFE_CONTINUITY_PLAN.md`。LIFE.0～13、Windows 安装版验收与独立总 Review 已完成；LIFE v1 冻结于 Schema 71，0 个未解决 P0/P1。LIFE PR #3 merge `f16d80ab0d2457065dc65d7d284d3cbf3584f5ee` 是 KIG predecessor，KIG 从 Schema 72 开工。
+- 退役专项：`docs/LLM_DECISION_AND_LIFE_CONTINUITY_PLAN.md`。LIFE.0～13 的历史施工和验收事实保留，但其产品结论已被助手优先退役计划取代。实验版不得新增 LIFE 写路径、运行时消费或前端入口。
+- Persona/WorldBook/ShortMemo：保留通用能力；ShortMemo 迁出 LIFE，InnerStateProjection 退役。
 
 ---
 
@@ -116,6 +116,15 @@
 - 多模型路由不等于多 Agent。
 - Worker 只能在统一 Scheduler、PolicyGuard 和审计体系下运行。
 - 多 Agent 不得表现为多个角色争夺最终回答权。
+
+### 4.5 助手优先与 LIFE 退役
+
+- LIFE 不再是可切换产品 Profile；退役迁移完成后实验版只有助手优先路线。
+- 不生成 LifeClock、SelfState、模拟日程、离线生活、遐蝶个人目标、日记或 SelfTimeline。
+- Affect 只保留当轮用户状态理解与表达指导；Relationship 只管理真实互动支持的距离、信任和边界。
+- 主动行为只由任务、提醒、承诺、重要日期、工具结果、OpenThread 或当前轮有证据的关心触发。
+- 用户重要日期、约定和项目事实必须先迁移到 Memory/Task/Reminder，再删除 LIFE 数据结构。
+- KIG 检索源不再包含 `life`；PWM 不得保存模拟生活或虚构心境。
 
 ---
 
@@ -376,12 +385,15 @@ node --check preload.js
 
 ## 14. 当前专项入口
 
-知识库 F.1～F.8、优化 K.0～K.9、上下文 CTX.0～CTX.7、EAP.R0～R6、CDS.0～13、LIFE.0～13 与 KIG.0～15 均已完成。KIG 权威冻结入口为：
+当前产品与施工入口按顺序为：
 
-`docs/XIADIE_KNOWLEDGE_INTELLIGENCE_GOVERNANCE_AND_WORLD_MODEL_PLAN.md`
+1. `docs/ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md`
+2. `docs/CYRENE_STYLE_AGENT_LONG_TERM_ROADMAP.md`
+3. `docs/CYRENE_STYLE_AGENT_EXPERIMENT_PLAN.md`
+4. `docs/SPECIALTY_OWNERSHIP_AND_CONTRACT_MATRIX.md`
 
-EAP Schema 48～60 不回写；真实输出继续受后端最终授权复核、系统恢复保护窗与 at-most-once 状态机约束，Level 5 外部渠道保持硬禁用。三份 v0.3 权威计划与 `docs/SPECIALTY_OWNERSHIP_AND_CONTRACT_MATRIX.md` 已纳入仓库，固定顺序为 `CDS → LIFE → KIG`。
+历史上知识库 F.1～F.8、K.0～K.9、CTX.0～CTX.7、EAP.R0～R6、CDS.0～13、LIFE.0～13、KIG.0～15、CIE.0～6 与 LIFE2.0～6 均已完成各自施工。其 Schema、测试和 Review 事实继续有效，但产品方向已改变：LIFE 退役，Persona/WorldBook/ShortMemo 拆分保留，其他专项按助手优先矩阵重新接线。
 
-EAP PR #1、CDS PR #2 与 LIFE PR #3 已依次合并冻结；LIFE predecessor 为 `main@f16d80ab0d2457065dc65d7d284d3cbf3584f5ee`、Schema 71。KIG-R 使用 Schema 72～76，冻结实现与 rollback point 为 `a18fd04a3759663f88d6a8041529fea14645c281`。KIG-P 使用 Schema 77～80，完成来源化 PWM、可逆实体解析、owner proposal-only 接口、非破坏性维护和原知识页扩展；既有 Knowledge/MEM/LIFE/CTX/EAP 所有权均未转移。模型认证仍只覆盖 `deepseek-v4-pro` 的 KIG-R 当前指纹，PWM 抽取保持 Shadow；Provider/模型切换必须重新认证。
+RETIRE.0～RETIRE.3 已于 2026-08-01 完成，现有数据库已经备份、迁移并删除 LIFE 表。当前固定施工顺序从 `CYR.1 → CYR.2 → CYR.3` 继续；未完成 ToolRegistry、权限、产物和恢复前不得开放任意 Shell、任意文件系统、桌面输入控制或外部消息发送。
 
-KIG PR #4 与 CIE v1 均已合入；CIE 正式冻结于 `main@3a663391cf12f5a843f4c1d5e311628ce8637c6e` / Schema 81。LIFE v2 已按 `docs/LIFE_V2_PERSONA_AND_SHORT_MEMORY_PLAN.md` 完成计划内施工并将当前 Schema 推进到 82；持久化 `structured-inner-state-v1` 已取消。Persona 固定核心归 Persona，最终预算归 CTX，LIFE 未成为第二写入者。两次 Active 真实回归已由 `persona-profile-v2.2`、聊天邀请召回跳过、问句证据判定与 `persona-natural-dialogue-guard-v2` 收口；新证书同时绑定 DeepSeek 指纹、静态 Prompt hash 与输出门协议。WorldBook r1、`short-memo-v1` 与请求内 `inner-state-projection-v1` 继续 Shadow，任何后续 Active 晋级均需单独发布决定。
+EAP 的最终授权复核、恢复保护窗、at-most-once 投递与外部渠道硬门继续有效；KIG 的 SourceRef、证据、版本/新鲜度与 PWM 可重建原则继续有效；CIE 的取消、图片授权与 ContextContribution 治理继续有效。LIFE adapter、life source、InnerStateProjection 和生活化主动 seed 不再受“冻结兼容”保护，应按退役计划删除。

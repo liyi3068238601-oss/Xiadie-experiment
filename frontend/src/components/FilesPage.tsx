@@ -259,7 +259,7 @@ export function FilesPage() {
       `确定删除「${document.original_name}」吗？\n\n`
       + `将删除：应用内原文副本、${impact.chunk_count} 个切片、${impact.embedding_count} 个向量索引。\n`
       + `将失效：${impact.derived_dependency_count} 个来源化关联，既有 ${impact.citation_count} 条引用会明确显示来源不可访问。\n`
-      + "不会自动删除：独立聊天、长期记忆、LIFE 事件和应用外原文件。",
+      + "不会自动删除：独立聊天、长期记忆和应用外原文件。",
     );
     if (!confirmed) return;
     setActionBusy(`delete:${document.id}`);

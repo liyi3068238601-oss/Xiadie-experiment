@@ -1,8 +1,10 @@
 # 遐蝶项目基线状态
 
+> 实验路线变更（2026-08-01）：以下大部分内容记录 LIFE/KIG/CIE 冻结时的历史运行基线。`Xiadie-experiment` 已完成助手优先 RETIRE.0～RETIRE.3，LIFE 运行时与专属 Schema 已物理退役；MEM、Knowledge、CTX、CDS、KIG/PWM、CIE、Persona/WorldBook 和任务驱动 EAP 保留。现行入口见 `ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md` 与 `CYRENE_STYLE_AGENT_LONG_TERM_ROADMAP.md`。
+
 > 最近复核日期：2026-07-29
 >
-> 当前施工状态：LIFE2.0～LIFE2.6 已完成。Persona 真实聊天先后发现动作旁白，以及闲聊中虚构当前环境并混入“资料不足”审计措辞；当前 `persona-profile-v2.2` 以 `deepseek-v4-flash`、temperature=0 完成三轮 150/150 生产等价认证。`persona-natural-dialogue-guard-v2` 同时约束跨 chunk 动作旁白与无依据闲聊环境，Smart Recall/KIG 不再检索聊天邀请，问句也不会被证据门改写。模型指纹或输出门协议不匹配时仍自动回退旧 Persona。WorldBook r1、Schema 82 `short-memo-v1` 与无迁移的 `inner-state-projection-v1` 均继续 Shadow。
+> 当前施工状态：助手优先 RETIRE.0～RETIRE.3 已实施。此前 LIFE2.0～LIFE2.6 的 Persona、WorldBook 和 ShortMemo 成果拆分保留；`inner-state-projection-v1` 与 LIFE 路线已删除。Persona 的 DeepSeek 认证、自然对话守卫、Smart Recall/KIG 聊天邀请跳过和问句证据判定继续有效。
 >
 > 当前版本：`v0.1.0` MVP 骨架（知识库系统 K 系列已完成）
 >

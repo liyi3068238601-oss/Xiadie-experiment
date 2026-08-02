@@ -1,5 +1,7 @@
 # 遐蝶自主记忆系统设计书（零基础说明版）
 
+> 助手优先边界（2026-08-01）：MEM 保留。Fragment、Entity、Episode、Saga 只能组织真实用户事实、原始对话、共同项目和有证据的工具结果；不得把 LIFE 模拟事件、日记、心境、日程或遐蝶离线活动迁入记忆。本文中“遐蝶自己的记忆”统一解释为真实交互与来源化系统经历，不表示虚构人生。冲突时以 `ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md` 为准。
+
 版本：v0.34
 
 状态：设计基线；阶段 A～F 已完成

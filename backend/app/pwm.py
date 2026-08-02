@@ -26,8 +26,8 @@ PREDICATES = frozenset({
     "occurred_at", "involves",
 })
 EVENT_LAYERS = frozenset({
-    "external_world", "user_life", "shared_conversation", "agent_simulated_life",
-    "agent_real_action", "project_history",
+    "external_world", "user_life", "shared_conversation", "agent_real_action",
+    "project_history",
 })
 SENSITIVE_ATTRIBUTE = re.compile(
     r"(?:medical|diagnos|religio|politic|income|salary|asset|intimate|sexual|身份证|"
@@ -175,7 +175,7 @@ def link_entity_source(*, entity_id: str, source_ref: kig_sources.SourceRef,
                        link_role: str = "derived_from") -> dict:
     owner = {
         "knowledge_document": "knowledge", "knowledge_chunk": "knowledge", "message": "conversation",
-        "memory_fragment": "memory", "life_event": "life", "tool_run": "tool", "lore_section": "lore",
+        "memory_fragment": "memory", "tool_run": "tool", "lore_section": "lore",
     }[source_ref.source_kind]
     now, link_id = db.now(), db.new_id()
     conn = db.connect()
@@ -335,8 +335,6 @@ def create_world_event(*, event_type: str, title: str, source_kind: str, source_
         raise PWMError("event_type_invalid", "event layer or execution state is invalid")
     if event_layer == "agent_real_action" and source_kind != "tool_run":
         raise PWMError("tool_run_required", "agent real actions require an authoritative ToolRun")
-    if source_kind == "life_event" and execution_state == "performed":
-        raise PWMError("life_projection_semantics", "LIFE projection cannot promote an event to performed")
     _validate_sensitive(title, summary, event_type)
     ref = _source(source_kind, source_id)
     event_id, now = db.new_id(), db.now()

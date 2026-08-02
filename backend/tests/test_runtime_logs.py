@@ -53,15 +53,16 @@ def _tool(log_id: str, created_at: float) -> None:
 
 
 def test_runtime_feed_unifies_sources_without_copying_full_chat_bodies():
-    _session("runtime-feed-session")
+    created_at = 8_900_000_000.0
+    _session("runtime-feed-session", created_at=created_at)
     long_input = "输入正文-" + "甲" * 400
     long_output = "输出正文-" + "乙" * 400
-    _message("runtime-feed-user", "runtime-feed-session", "user", long_input, 101.0)
+    _message("runtime-feed-user", "runtime-feed-session", "user", long_input, created_at + 1)
     _message(
         "runtime-feed-assistant", "runtime-feed-session", "assistant", long_output,
-        102.0, model="deepseek-v4-flash",
+        created_at + 2, model="deepseek-v4-flash",
     )
-    _tool("runtime-feed-tool", 103.0)
+    _tool("runtime-feed-tool", created_at + 3)
 
     result = runtime_logs.list_feed(limit=50)
     assert {item["category"] for item in result["items"]} >= {"model", "tool"}

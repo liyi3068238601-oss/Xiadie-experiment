@@ -22,7 +22,6 @@ class CandidateKind:
     EMOTIONAL_CARE = "emotional_care"            # 情感关怀
     MILESTONE_FOLLOWUP = "milestone_followup"    # 里程碑跟进
     CASUAL_GREETING = "casual_greeting"          # 轻量问候
-    LIFE_SHARE = "life_share"                    # 生活事件分享
 
 
 ALL_CANDIDATE_KINDS = (
@@ -31,7 +30,6 @@ ALL_CANDIDATE_KINDS = (
     CandidateKind.EMOTIONAL_CARE,
     CandidateKind.MILESTONE_FOLLOWUP,
     CandidateKind.CASUAL_GREETING,
-    CandidateKind.LIFE_SHARE,
 )
 
 

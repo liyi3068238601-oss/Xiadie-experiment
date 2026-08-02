@@ -1,12 +1,35 @@
-# CDS、LIFE、KIG 专项所有权与共享施工契约
+# Xiadie 助手优先专项所有权与共享施工契约
 
-- 版本：v1.2
-- 日期：2026-07-28
-- 状态：CDS、LIFE、KIG-R 与 KIG-P 已完成；KIG v1 已冻结
-- 适用顺序：`CDS → LIFE → KIG`
+- 版本：v2.0
+- 日期：2026-08-01
+- 状态：助手优先所有权已冻结；LIFE 进入 RETIRE.0～RETIRE.5
+- 适用顺序：`RETIRE → Chat/Work → Task → ToolRegistry → Web/Research`
 - 解释优先级：冻结协议与 ADR > 本矩阵 > 专项计划 > 阶段施工记录
 
-## 1. ConstructionBaseline
+> v2.0 路线变更：LIFE 不再是现行所有者或 adapter 参与者。第 1 节中早期 ConstructionBaseline、Schema 64～71 和历史冻结记录继续作为审计证据，但不能据此新增 LIFE 依赖。冲突时以 `ASSISTANT_FIRST_ARCHITECTURE_AND_LIFE_RETIREMENT_PLAN.md` 为准。
+
+## 0. 助手优先唯一所有权矩阵
+
+| 对象/能力 | 唯一所有者与最终写入者 | 可读/可提议者 | 删除语义 |
+|---|---|---|---|
+| Persona Core / Chat/Work | Persona | CTX 只读编译结果 | 资源版本化；不能被用户资料覆盖 |
+| Conversation Presence | EAP | CDS/CIE 只读或提议 | EAP 管理 |
+| 当轮用户状态 / 表达指导 | EAP/Persona 请求编排 | CDS 提议 | 请求结束即失效，不跨轮持久化 |
+| Relationship 边界 | EAP Reducer | MEM/CDS 提议 | 用户可纠正/清除；不影响权限 |
+| Proactive Candidate/Delivery/Feedback | EAP | Task/Reminder/Tool/OpenThread 提供来源 seed | EAP 状态机与用户清除规则 |
+| ContextPackage / 最终预算 | CTX | CDS/KIG 提建议 | 可重建派生包 |
+| DecisionRun / 通用决策运行时 | CDS | 所有领域注册任务 | 按诊断保留策略；不删领域事实 |
+| Fragment/Entity/Episode/Saga | MEM | CDS/KIG 提议 | MEM 生命周期与来源保护 |
+| ShortMemo | Assistant Context（Task/CTX/MEM 协作，单写服务） | Persona/EAP 只读 | TTL、用户清除；不得自动晋升 |
+| KnowledgeDocument/Chunk/Search/Citation | Knowledge | KIG 治理；CTX 消费 | Knowledge 完整删除级联 |
+| SourceRef/Evidence/PWM | KIG | CTX/MEM/Task 消费 | 来源失效传播；派生层可重建 |
+| Task/TaskRun/Reminder | Task（RETIRE.2/CYR.2 建立） | EAP/KIG/CTX 只读或提议 | Task 状态机与用户删除 |
+| ToolRun/Artifact | ToolRegistry（CYR.3 建立） | Task/KIG/CTX 读取证据 | 工具审计与产物所有者管理 |
+| LIFE 全域 | 无；退役 | 只允许迁移器读取旧库 | RETIRE.4 备份后物理删除 |
+
+LIFE 的 LifeEvent、Schedule、Diary、ImportantDate、PersonalGoal、SelfTimeline 和 InnerStateProjection 不得转移给另一个系统继续模拟。只有用户确认的日期、约定、任务和项目事实可以按来源迁移。
+
+## 1. 历史 ConstructionBaseline
 
 每个专项的第 0 阶段必须把以下记录写入阶段报告；字段不完整时只能审计，不能新增迁移或生产写路径。
 
@@ -82,7 +105,7 @@ KIG-P 冻结基线：
 
 禁止从旧 `main` 开工后再合入前置大分支，也禁止两个专项并行占用迁移号。
 
-## 2. 唯一所有权矩阵
+## 2. 历史唯一所有权矩阵（仅用于解释旧 Schema）
 
 | 对象/能力 | 唯一所有者与最终写入者 | 可读/可提议者 | 冻结或目标协议 | 删除语义 |
 |---|---|---|---|---|
@@ -99,7 +122,7 @@ KIG-P 冻结基线：
 
 任何专项都不得因为“需要读取”而成为第二个正式写入者。
 
-## 3. Adapter 与迁移契约
+## 3. 历史 Adapter 与迁移契约（LIFE adapter 已退役）
 
 | 所有者 | adapter_version | source_revision_format | fallback_owner | temporary_chat_behavior | remote_transfer_policy | migration_owner |
 |---|---|---|---|---|---|---|

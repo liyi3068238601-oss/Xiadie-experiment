@@ -66,7 +66,6 @@ def _visible_text(candidate_kind: str, topic: str) -> str:
         "return_followup": f"你之前提到「{topic}」，结果怎么样？不急，方便时再告诉我。",
         "chat_continuation": f"刚才的「{topic}」还想继续聊聊。你有空时我再听。",
         "milestone_followup": f"刚想起「{topic}」。有空时，想听听你现在的感受。",
-        "life_share": f"我想和你分享：{topic}",
     }
     return templates.get(candidate_kind, topic or "想来看看你。")[:240]
 

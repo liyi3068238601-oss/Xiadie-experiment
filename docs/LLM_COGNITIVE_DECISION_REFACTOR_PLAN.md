@@ -1,5 +1,7 @@
 # 遐蝶 LLM 认知决策改造专项施工计划
 
+> 助手优先改造声明（2026-08-01）：CDS 通用 DecisionRun、结构化模型判断、路由、验证、熔断、预算和校准完整保留。`life_schedule_*`、`life_important_date_interpretation`、`life_diary_reflection`、`life_event_meaning` 等 LIFE 专属 decision kind 将在 RETIRE.1 删除，后续能力重心转向 Task、Tool 和 Research。
+
 * **版本：** v0.3（施工基线、晋级、预算与数据治理补强）
 * **日期：** 2026-07-26
 * **状态：** CDS.0～13 已完成并通过最终独立 Review；`cognitive-decision-v1`、Schema 63 与兼容矩阵正式冻结
@@ -9,7 +11,7 @@
 
   * `CTX`：对话上下文、会话摘要与跨会话回忆
   * `EAP`：完整情感、关系积温与主动陪伴
-  * `LIFE`：生活连续性、离线世界、日程、重要日期和日记
+  * `Task/Tool`：助手优先路线下的任务、工具、研究和结果验证；原 LIFE 专属任务已退役
 * **不包含：** ToolRegistry 正式执行、MCP、多 Agent、QQ/微信正式投递、任意桌面自动化、高风险权限放宽
 * **上线顺序：** 所有决策器必须经过 `Shadow → Advisory → Active`
 * **执行规则：** 每阶段完成代码、测试、文档、Review 和独立提交后，才能进入下一阶段

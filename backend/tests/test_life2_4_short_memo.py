@@ -12,16 +12,16 @@ from app import db, short_memo
 def clean_short_memo_state():
     db.init_db()
     short_memo.clear(clear_events=True)
-    db.set_setting("life.short_memo.enabled", "1")
-    db.set_setting("life.short_memo.rollout_mode", "shadow")
-    db.set_setting("life.short_memo.rollout_epoch", "0")
-    db.set_setting("life.short_memo.remote_extraction_enabled", "0")
-    db.set_setting("life.short_memo.default_ttl_seconds", "259200")
-    db.set_setting("life.short_memo.max_active", "10")
-    db.set_setting("life.short_memo.max_recall", "3")
+    db.set_setting("assistant.short_memo.enabled", "1")
+    db.set_setting("assistant.short_memo.rollout_mode", "shadow")
+    db.set_setting("assistant.short_memo.rollout_epoch", "0")
+    db.set_setting("assistant.short_memo.remote_extraction_enabled", "0")
+    db.set_setting("assistant.short_memo.default_ttl_seconds", "259200")
+    db.set_setting("assistant.short_memo.max_active", "10")
+    db.set_setting("assistant.short_memo.max_recall", "3")
     yield
     short_memo.clear(clear_events=True)
-    db.set_setting("life.short_memo.rollout_mode", "shadow")
+    db.set_setting("assistant.short_memo.rollout_mode", "shadow")
 
 
 def _source(text: str) -> tuple[str, str]:
@@ -43,13 +43,13 @@ def _source(text: str) -> tuple[str, str]:
     return session_id, message_id
 
 
-def test_schema_82_is_additive_and_defaults_to_shadow():
+def test_schema_84_preserves_short_memo_and_defaults_to_shadow():
     conn = db.connect()
     try:
         version = conn.execute(
             "SELECT value FROM schema_meta WHERE key='schema_version'"
         ).fetchone()[0]
-        assert version == "82"
+        assert version == "84"
         memo_columns = {row["name"] for row in conn.execute("PRAGMA table_info(short_memos)")}
         event_columns = {row["name"] for row in conn.execute("PRAGMA table_info(short_memo_events)")}
         assert {"source_snapshot_hash", "dedupe_key", "expires_at"} <= memo_columns
@@ -123,7 +123,7 @@ def test_active_create_recall_dedupe_and_expiry_are_source_guarded(monkeypatch):
 
 
 def test_capacity_rejection_has_no_fake_memo_or_event():
-    db.set_setting("life.short_memo.max_active", "1")
+    db.set_setting("assistant.short_memo.max_active", "1")
     snap = short_memo.set_rollout_mode("active")
     first_text, second_text = "明天我要归还图书馆的书", "后天我要领取修好的相机"
     first_session, first_message = _source(first_text)
@@ -184,7 +184,7 @@ def test_expiry_update_delete_clear_and_product_switch_are_user_governed():
 def test_remote_validator_can_only_veto_and_failure_is_fail_closed(monkeypatch):
     text = "明天我要去图书馆还书"
     session_id, message_id = _source(text)
-    db.set_setting("life.short_memo.remote_extraction_enabled", "1")
+    db.set_setting("assistant.short_memo.remote_extraction_enabled", "1")
     snap = short_memo.set_rollout_mode("active")
 
     async def reject(*_args, **_kwargs):
@@ -215,7 +215,7 @@ def test_remote_validator_can_only_veto_and_failure_is_fail_closed(monkeypatch):
 def test_remote_validator_accepts_only_the_deterministic_candidate(monkeypatch):
     text = "明天我要去图书馆还书"
     session_id, message_id = _source(text)
-    db.set_setting("life.short_memo.remote_extraction_enabled", "1")
+    db.set_setting("assistant.short_memo.remote_extraction_enabled", "1")
     snap = short_memo.set_rollout_mode("active")
     observed = {}
 
@@ -245,7 +245,7 @@ def test_remote_validator_accepts_only_the_deterministic_candidate(monkeypatch):
 def test_rollout_off_never_calls_remote_validator(monkeypatch):
     text = "明天我要去图书馆还书"
     session_id, message_id = _source(text)
-    db.set_setting("life.short_memo.remote_extraction_enabled", "1")
+    db.set_setting("assistant.short_memo.remote_extraction_enabled", "1")
     snap = short_memo.set_rollout_mode("off")
 
     async def forbidden(*_args, **_kwargs):

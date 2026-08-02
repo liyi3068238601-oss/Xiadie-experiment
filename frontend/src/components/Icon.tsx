@@ -3,7 +3,6 @@ import type { ReactNode, SVGProps } from "react";
 export type IconName =
   | "chat"
   | "task"
-  | "life"
   | "memory"
   | "folder"
   | "tool"
@@ -16,7 +15,6 @@ export type IconName =
 const paths: Record<IconName, ReactNode> = {
   chat: <><path d="M5 5h14v11H9l-4 3V5Z"/><path d="M8 9h8M8 12h5"/></>,
   task: <><path d="m4 6 1.5 1.5L8 5M11 6h9M4 12l1.5 1.5L8 11M11 12h9M4 18l1.5 1.5L8 17M11 18h9"/></>,
-  life: <><path d="M12 3a7.5 7.5 0 1 0 7.5 7.5A6 6 0 0 1 12 3Z"/><path d="M17 4.5h.01M20 8h.01"/></>,
   memory: <><path d="M9 4.5a3 3 0 0 0-5 2.2 3.5 3.5 0 0 0 .7 6.8A3 3 0 0 0 9 17.8V4.5ZM15 4.5a3 3 0 0 1 5 2.2 3.5 3.5 0 0 1-.7 6.8A3 3 0 0 1 15 17.8V4.5Z"/><path d="M9 8H7.5M15 8h1.5M9 13H7M15 13h2"/></>,
   folder: <path d="M3.5 6.5A2.5 2.5 0 0 1 6 4h4l2 2h6A2.5 2.5 0 0 1 20.5 8.5v8A2.5 2.5 0 0 1 18 19H6a2.5 2.5 0 0 1-2.5-2.5v-10Z"/>,
   tool: <path d="M14.7 6.3a4 4 0 0 0-5-5L12 3.6 9.6 6 7.3 3.7a4 4 0 0 0 5 5L19 15.4a2.1 2.1 0 0 1-3 3l-6.7-6.7M6.5 13.5l-4 4a1.4 1.4 0 0 0 2 2l4-4"/>,

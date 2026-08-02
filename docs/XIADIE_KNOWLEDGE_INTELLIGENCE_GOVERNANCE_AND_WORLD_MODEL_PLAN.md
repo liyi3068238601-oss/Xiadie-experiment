@@ -1,11 +1,13 @@
 # 遐蝶知识智能、信息治理与个人世界模型专项施工计划
 
+> 助手优先改造声明（2026-08-01）：KIG/PWM 核心保留。查询源从 Knowledge、Memory、History、Life、Task、Lore 六源收敛为 Knowledge、Memory、History、Task、Lore 五源；删除 LIFE/SelfTimeline adapter。PWM 只能保存有 SourceRef 的用户、项目、文档和工具事实，不得保存模拟心境、虚构日程或遐蝶离线活动。
+
 - 版本：v1.0（KIG-R + KIG-P 完整施工与冻结基线）
 - 日期：2026-07-28
 - 状态：KIG.0～KIG.15 已完成；KIG-R 保持冻结于 Schema 76，KIG-P 已在 Schema 77～80 完成并通过 `kig-p-acceptance-v1`
 - 专项代号：`KIG`（Knowledge Intelligence & Governance）
 - 子系统代号：`PWM`（Personal World Model）
-- 适用范围：用户知识库、信息分类与治理、多源检索、LLM 查询规划与重排、证据与引用、冲突与版本、个人世界模型，以及与对话历史、长期记忆、生活连续性、任务和 ContextAssembler 的接口
+- 适用范围：用户知识库、信息分类与治理、多源检索、LLM 查询规划与重排、证据与引用、冲突与版本、个人世界模型，以及与对话历史、长期记忆、任务、工具和 ContextAssembler 的接口
 - 不包含：SecretStore、ToolRegistry、MCP、多 Agent、外部消息平台、桌面自动化、完整联网研究 Agent、云端多人知识空间
 - 施工原则：本计划描述最终能力全集；开始施工前必须审查现有代码、数据库、测试和 UI，已经完整实现的项目直接勾选，部分实现只补差距，不因设计重叠而重写现有功能
 - 专项顺序：`CDS → LIFE → KIG`；KIG 是最后一项，不与前两项并行迁移或抢占领域所有权
@@ -14,7 +16,7 @@
 - 关联专项：
   - `CTX`：对话上下文、滚动摘要与跨会话历史回忆
   - `EAP`：情感、关系积温与主动陪伴
-  - `LIFE`：生活连续性、离线世界、日程、日期、日记与 SelfTimeline
+  - `LIFE`：已退役；仅在迁移期间读取旧来源状态，最终删除 adapter
   - `MEM`：Fragment、Episode、Saga、Archivist 和记忆观察器
 
 ---
@@ -26,7 +28,7 @@
 1. 现有 Knowledge 已完成文档导入、解析与稳定切片、FTS/Dense 混合检索、Embedding、引用与原文定位、删除生命周期、传输策略/授权、搜索 v2、评测与 CTX 接线，并已有 API、UI 和测试。KIG.0 必须逐项给出 `[x]/[~]` 证据，禁止新建第二套 KnowledgeDocument、Chunk、导入、删除、引用或搜索主链。
 2. CTX 已冻结 ContextAssembler 与硬预算；EAP 六协议及 Schema 60 已冻结。KIG 只通过稳定只读接口消费，不修改情绪、关系、主动决策、表达、投递与反馈状态机。
 3. CDS 负责共享 DecisionRun、CandidateEnvelope、structured output、Shadow/Advisory/Active、模型路由、校验、熔断与通用 rerank 运行时。KIG 只注册查询规划、信息分类、检索重排、支持度与 PWM 的领域协议，不复制通用运行时。
-4. LIFE 负责生活事件、日期、日记和 SelfTimeline；KIG 在 LIFE 冻结后建立只读来源适配，不反向写入或重建 LIFE 账本。
+4. LIFE 已进入退役；KIG 删除 LifeEvent/SelfTimeline 只读来源适配，不把旧派生内容迁入 PWM。用户日期、任务和项目事实由新所有者提供 SourceRef。
 5. KIG 独占的新增范围是跨源 `SourceRef` adapter、信息分类提案、派生 Claim/Entity/Relation/WorldEvent、版本与新鲜度、Evidence 支持度和 PWM 投影。既有来源正文仍留在原系统。
 6. 新结构切片、索引或检索版本必须旁路构建、对照验收并原子切换；不得就地破坏现有可用索引。
 7. KIG.0 必须确认 CDS 与 LIFE 均已集成到 `main`，锁定 LIFE 的不可变最终提交、Schema、协议/adapter 与测试基线；否则只能审计。

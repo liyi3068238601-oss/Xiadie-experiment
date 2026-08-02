@@ -10,6 +10,17 @@ import uuid
 
 DEFAULT_MEMORY_ENABLED = "1"
 
+RETIRED_LIFE_TABLES = (
+    "life_events", "life_event_revisions", "life_event_sources", "life_event_audit_events",
+    "life_runtime_state", "life_runtime_lease", "life_runtime_events", "life_exit_snapshots",
+    "life_catchup_requests", "life_catchup_candidates", "life_schedules",
+    "life_schedule_segments", "life_schedule_replacements", "life_event_candidates",
+    "personal_goals", "personal_goal_sources", "personal_goal_events", "important_dates",
+    "important_date_sources", "important_date_events", "continuity_threads", "diary_entries",
+    "diary_entry_revisions", "diary_entry_sources", "self_timeline_entries",
+    "life_proactive_seeds",
+)
+
 DATA_DIR = os.environ.get(
     "XIADIE_DATA_DIR",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data"),
@@ -3948,6 +3959,170 @@ MIGRATIONS = [
         INSERT OR IGNORE INTO settings(key,value) VALUES('life.inner_state_projection.rollout_mode','shadow');
         """,
     ),
+    (
+        83,
+        """
+        -- RETIRE.2: move retained assistant capabilities out of the LIFE namespace.
+        INSERT OR IGNORE INTO settings(key,value)
+            SELECT 'assistant.short_memo.enabled',value FROM settings
+            WHERE key='life.short_memo.enabled';
+        INSERT OR IGNORE INTO settings(key,value)
+            SELECT 'assistant.short_memo.rollout_mode',value FROM settings
+            WHERE key='life.short_memo.rollout_mode';
+        INSERT OR IGNORE INTO settings(key,value)
+            SELECT 'assistant.short_memo.rollout_epoch',value FROM settings
+            WHERE key='life.short_memo.rollout_epoch';
+        INSERT OR IGNORE INTO settings(key,value)
+            SELECT 'assistant.short_memo.remote_extraction_enabled',value FROM settings
+            WHERE key='life.short_memo.remote_extraction_enabled';
+        INSERT OR IGNORE INTO settings(key,value)
+            SELECT 'assistant.short_memo.default_ttl_seconds',value FROM settings
+            WHERE key='life.short_memo.default_ttl_seconds';
+        INSERT OR IGNORE INTO settings(key,value)
+            SELECT 'assistant.short_memo.max_active',value FROM settings
+            WHERE key='life.short_memo.max_active';
+        INSERT OR IGNORE INTO settings(key,value)
+            SELECT 'assistant.short_memo.max_recall',value FROM settings
+            WHERE key='life.short_memo.max_recall';
+        INSERT OR IGNORE INTO settings(key,value)
+            SELECT 'assistant.persona_v2.rollout_mode',value FROM settings
+            WHERE key='life.persona_v2.rollout_mode';
+        INSERT OR IGNORE INTO settings(key,value)
+            SELECT 'assistant.worldbook_r1.rollout_mode',value FROM settings
+            WHERE key='life.worldbook_r1.rollout_mode';
+
+        INSERT OR IGNORE INTO settings(key,value) VALUES('assistant.short_memo.enabled','1');
+        INSERT OR IGNORE INTO settings(key,value) VALUES('assistant.short_memo.rollout_mode','shadow');
+        INSERT OR IGNORE INTO settings(key,value) VALUES('assistant.short_memo.rollout_epoch','0');
+        INSERT OR IGNORE INTO settings(key,value) VALUES('assistant.short_memo.remote_extraction_enabled','0');
+        INSERT OR IGNORE INTO settings(key,value) VALUES('assistant.short_memo.default_ttl_seconds','259200');
+        INSERT OR IGNORE INTO settings(key,value) VALUES('assistant.short_memo.max_active','10');
+        INSERT OR IGNORE INTO settings(key,value) VALUES('assistant.short_memo.max_recall','3');
+        INSERT OR IGNORE INTO settings(key,value) VALUES('assistant.persona_v2.rollout_mode','off');
+        INSERT OR IGNORE INTO settings(key,value) VALUES('assistant.worldbook_r1.rollout_mode','off');
+
+        DELETE FROM settings WHERE key LIKE 'life.short_memo.%';
+        DELETE FROM settings WHERE key IN (
+            'life.persona_v2.rollout_mode','life.worldbook_r1.rollout_mode',
+            'life.inner_state_projection.rollout_mode','life_continuity_mode',
+            'life_enabled','experiment.product_profile'
+        );
+        """,
+    ),
+    (
+        84,
+        """
+        -- RETIRE.3: preserve grounded user facts, then physically remove LIFE storage.
+        CREATE TABLE reminders (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','completed','dismissed')),
+            recurrence TEXT NOT NULL CHECK(recurrence IN ('once','yearly_solar')),
+            date_year INTEGER,
+            date_month INTEGER CHECK(date_month IS NULL OR date_month BETWEEN 1 AND 12),
+            date_day INTEGER CHECK(date_day IS NULL OR date_day BETWEEN 1 AND 31),
+            timezone_id TEXT NOT NULL,
+            source_kind TEXT NOT NULL,
+            source_id TEXT NOT NULL,
+            source_revision TEXT NOT NULL,
+            source_hash TEXT NOT NULL,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            UNIQUE(source_kind,source_id)
+        );
+        CREATE INDEX idx_reminders_due ON reminders(status,date_month,date_day);
+
+        CREATE TABLE retirement_migration_log (
+            id TEXT PRIMARY KEY,
+            migration_kind TEXT NOT NULL,
+            source_count INTEGER NOT NULL,
+            migrated_count INTEGER NOT NULL,
+            review_count INTEGER NOT NULL,
+            backup_path TEXT NOT NULL,
+            created_at REAL NOT NULL
+        );
+
+        INSERT OR IGNORE INTO reminders(
+            id,title,status,recurrence,date_year,date_month,date_day,timezone_id,
+            source_kind,source_id,source_revision,source_hash,created_at,updated_at
+        )
+        SELECT 'retired-date:' || d.id,d.label,'active',d.recurrence,d.date_year,d.date_month,
+               d.date_day,d.timezone_id,'retired_important_date',d.id,CAST(d.revision AS TEXT),
+               s.source_hash,d.created_at,d.updated_at
+        FROM important_dates d
+        JOIN important_date_sources s ON s.id=(
+            SELECT s2.id FROM important_date_sources s2
+            WHERE s2.important_date_id=d.id AND s2.active=1
+            ORDER BY CASE s2.source_kind WHEN 'manual' THEN 0 WHEN 'user_statement' THEN 1 ELSE 2 END,
+                     s2.created_at,s2.id LIMIT 1
+        )
+        WHERE d.status='active';
+
+        INSERT OR IGNORE INTO tasks(id,title,status,due_date,source,source_session_id,created_at,updated_at)
+        SELECT 'retired-goal:' || g.id,g.title,
+               CASE g.status WHEN 'completed' THEN 'done' WHEN 'active' THEN 'doing' ELSE 'todo' END,
+               g.target_date,'retired_user_goal',NULL,g.created_at,g.updated_at
+        FROM personal_goals g
+        WHERE g.status!='revoked' AND EXISTS(
+            SELECT 1 FROM personal_goal_sources s
+            WHERE s.goal_id=g.id AND s.source_kind='user_explicit' AND s.explicit_confirmation=1
+        );
+
+        INSERT INTO retirement_migration_log(
+            id,migration_kind,source_count,migrated_count,review_count,backup_path,created_at
+        ) VALUES(
+            lower(hex(randomblob(16))),'life_retirement',
+            (SELECT COUNT(*) FROM important_dates)+(SELECT COUNT(*) FROM personal_goals),
+            (SELECT COUNT(*) FROM reminders WHERE source_kind='retired_important_date')+
+              (SELECT COUNT(*) FROM tasks WHERE source='retired_user_goal'),
+            (SELECT COUNT(*) FROM important_dates d WHERE d.status!='revoked' AND NOT EXISTS(
+                SELECT 1 FROM important_date_sources s WHERE s.important_date_id=d.id AND s.active=1
+            ))+
+              (SELECT COUNT(*) FROM personal_goals g WHERE g.status!='revoked' AND NOT EXISTS(
+                SELECT 1 FROM personal_goal_sources s WHERE s.goal_id=g.id
+                  AND s.source_kind='user_explicit' AND s.explicit_confirmation=1
+            )),
+            'backups/life-retirement-before-schema-84.json',strftime('%s','now')
+        );
+
+        DELETE FROM kig_evidence_links WHERE source_kind='life_event';
+        DELETE FROM kig_source_governance WHERE source_kind='life_event';
+        DELETE FROM kig_version_relations
+            WHERE older_source_kind='life_event' OR newer_source_kind='life_event';
+        DELETE FROM derived_dependencies WHERE source_kind='life_event';
+        DELETE FROM pwm_entity_source_links WHERE owner_system='life';
+        DELETE FROM kig_system_proposals WHERE source_kind='life_event';
+        DELETE FROM kig_retrieval_feedback WHERE source_kind='life_event';
+        DELETE FROM settings WHERE key LIKE 'life.%' OR key LIKE 'life_%';
+
+        DROP TABLE self_timeline_entries;
+        DROP TABLE diary_entry_sources;
+        DROP TABLE diary_entry_revisions;
+        DROP TABLE diary_entries;
+        DROP TABLE continuity_threads;
+        DROP TABLE personal_goal_events;
+        DROP TABLE personal_goal_sources;
+        DROP TABLE personal_goals;
+        DROP TABLE important_date_events;
+        DROP TABLE important_date_sources;
+        DROP TABLE important_dates;
+        DROP TABLE life_event_candidates;
+        DROP TABLE life_schedule_replacements;
+        DROP TABLE life_schedule_segments;
+        DROP TABLE life_schedules;
+        DROP TABLE life_catchup_candidates;
+        DROP TABLE life_catchup_requests;
+        DROP TABLE life_exit_snapshots;
+        DROP TABLE life_runtime_events;
+        DROP TABLE life_runtime_lease;
+        DROP TABLE life_runtime_state;
+        DROP TABLE life_event_audit_events;
+        DROP TABLE life_event_sources;
+        DROP TABLE life_event_revisions;
+        DROP TABLE life_proactive_seeds;
+        DROP TABLE life_events;
+        """,
+    ),
 ]
 
 # 默认供应商：全部 OpenAI-Compatible。api_key 开发期存本地库，
@@ -4061,6 +4236,8 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
     for target, sql in MIGRATIONS:
         if target <= version:
             continue
+        if target == 84:
+            _backup_retired_life_tables(conn)
         conn.executescript(sql)
         conn.execute(
             "INSERT INTO schema_meta(key, value) VALUES('schema_version', ?)"
@@ -4068,6 +4245,36 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
             (str(target),),
         )
         version = target
+
+
+def _backup_retired_life_tables(conn: sqlite3.Connection) -> str:
+    """Write a one-time local recovery copy before schema 84 drops LIFE tables."""
+    backup_dir = os.path.join(DATA_DIR, "backups")
+    backup_path = os.path.join(backup_dir, "life-retirement-before-schema-84.json")
+    if os.path.exists(backup_path):
+        return backup_path
+    existing = {
+        row["name"] for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    }
+    payload = {
+        "format": "xiadie-life-retirement-backup-v1",
+        "created_at": now(),
+        "schema_before": 83,
+        "tables": {
+            table: [dict(row) for row in conn.execute(f'SELECT * FROM "{table}"').fetchall()]
+            for table in RETIRED_LIFE_TABLES if table in existing
+        },
+    }
+    os.makedirs(backup_dir, exist_ok=True)
+    temporary_path = backup_path + ".tmp"
+    with open(temporary_path, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False, sort_keys=True, indent=2)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary_path, backup_path)
+    return backup_path
 
 
 def get_setting(key: str, default: str = "") -> str:

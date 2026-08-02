@@ -7,14 +7,13 @@ import pytest
 from app import db
 from app import main as main_module
 from app.proactive import (
-    candidates, decision, episodes, life_adapter, orchestrator, presence,
+    candidates, decision, episodes, orchestrator, presence,
 )
 
 _created_sessions = []
 _created_fragments = []
 _created_memory_episodes = []
 _created_memory_sagas = []
-_created_life_seeds = []
 
 
 @pytest.fixture(autouse=True)
@@ -23,7 +22,6 @@ def reset_runtime_settings():
     conn = db.connect()
     try:
         for table in (
-            "life_proactive_seeds",
             "expression_plans", "proactive_intensity_plans", "proactive_decisions",
             "proactive_candidate_claims", "proactive_runtime_sagas",
             "proactive_runtime_sources", "proactive_candidates", "contact_episodes",
@@ -58,8 +56,6 @@ def reset_runtime_settings():
     yield
     conn = db.connect()
     try:
-        for seed_id in _created_life_seeds:
-            conn.execute("DELETE FROM life_proactive_seeds WHERE id=?", (seed_id,))
         for saga_id in _created_memory_sagas:
             conn.execute("DELETE FROM memory_sagas WHERE id=?", (saga_id,))
         for episode_id in _created_memory_episodes:
@@ -75,7 +71,6 @@ def reset_runtime_settings():
     _created_fragments.clear()
     _created_memory_episodes.clear()
     _created_memory_sagas.clear()
-    _created_life_seeds.clear()
     for key, value in original.items():
         db.set_setting(key, value)
 
@@ -116,7 +111,7 @@ def _enqueue_casual(session_id, assistant_id, *, due_at):
         payload={
             "topic": "light check-in",
             "open_thread": None,
-            "origin_type": episodes.OriginType.LIFE_SHARE,
+            "origin_type": episodes.OriginType.CASUAL_GREETING,
             "candidate_kind": candidates.CandidateKind.CASUAL_GREETING,
         },
         due_at=due_at,
@@ -153,7 +148,7 @@ def test_schema_60_has_runtime_delivery_and_feedback_tables():
         ).fetchall()}
     finally:
         conn.close()
-        assert version == "82"
+        assert version == "84"
     assert {
         "proactive_runtime_sources", "proactive_candidate_claims",
         "proactive_runtime_sagas", "proactive_deliveries",
@@ -383,7 +378,6 @@ def test_main_lifespan_owns_orchestrator_start_and_stop(monkeypatch):
 
     for service in (
         main_module.conversation_summary_service,
-        main_module.affect_observer_service,
         main_module.companion_cognition_service,
         main_module.memory_observer_service,
         main_module.episode_consolidator,
@@ -402,28 +396,6 @@ def test_main_lifespan_owns_orchestrator_start_and_stop(monkeypatch):
         assert orchestrator._worker_task is None
 
     asyncio.run(exercise())
-
-
-def test_life_fixture_only_enqueues_source_then_eap_consumes_it():
-    session_id, _, _ = _session_turn()
-    seed = life_adapter.receive_life_seed(
-        source_event_type=life_adapter.LifeSeedSourceType.IMPORTANT_DATE,
-        source_event_id=db.new_id(), source_event_summary="project anniversary",
-        source_revision="r1", source_hash="a" * 64,
-    )
-    _created_life_seeds.append(seed.id)
-    now = db.now()
-    source = orchestrator.enqueue_life_seed_fixture(
-        session_id=session_id, seed_id=seed.id, due_at=now, now=now,
-    )
-    assert source is not None
-    assert life_adapter.get_seed(seed.id).consumed_at is None
-    assert source["candidate_id"] is None
-    assert orchestrator.process_due(now=now, worker_id="life") == 2
-    consumed = life_adapter.get_seed(seed.id)
-    assert consumed.consumed_candidate_id is not None
-    result = decision.get_decision_by_candidate(consumed.consumed_candidate_id)
-    assert result is not None and result.is_shadow is True
 
 
 def test_due_queue_uses_same_path_from_fifteen_minutes_to_thirty_days():

@@ -5,7 +5,7 @@ import pytest
 
 from app import (
     db, kig_retrieval as retrieval, kig_sources, knowledge, knowledge_embeddings,
-    knowledge_worker, life_events, lore, memory, self_timeline,
+    knowledge_worker, lore, memory,
 )
 
 
@@ -121,7 +121,7 @@ def test_knowledge_adapter_reuses_hybrid_search_and_lexical_fallback(monkeypatch
     assert any(item.candidate_role == "neighbor" for item in batch.candidates)
 
 
-def test_existing_memory_history_life_and_task_stores_adapt_without_body_copy():
+def test_existing_memory_history_and_task_stores_adapt_without_body_copy():
     now = db.now()
     memory.create_memory("L1", "星河共同主题")
     session_id = db.new_id()
@@ -148,20 +148,13 @@ def test_existing_memory_history_life_and_task_stores_adapt_without_body_copy():
         conn.commit()
     finally:
         conn.close()
-    source = life_events.SourceRef("system_observation", db.new_id(), "1", "b" * 64)
-    event, _ = life_events.create_event(
-        event_kind="observation", world_layer="observed", summary="星河生活记录",
-        source_refs=(source,), idempotency_key=f"kig6:{db.new_id()}",
-    )
-    self_timeline.refresh()
     batch = retrieval.retrieve(retrieval.RetrievalRequest(
-        query="星河", selected_sources=("memory", "history", "life", "task"), total_limit=12,
+        query="星河", selected_sources=("memory", "history", "task"), total_limit=12,
     ))
     sources = {item.source for item in batch.candidates}
-    assert {"memory", "history", "life", "task"} <= sources
+    assert {"memory", "history", "task"} <= sources
     assert not batch.failed_sources
     assert all(item.source_status == "active" and item.locator for item in batch.candidates)
-    assert any(item.source_id == event["id"] for item in batch.candidates)
 
 
 def test_lore_adapter_returns_a_valid_source_locator():

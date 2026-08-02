@@ -160,7 +160,7 @@ def test_get_episode_by_id():
     _setup_session(session_id)
     try:
         record = episodes.create_episode(
-            session_id, topic="查", origin_type=OriginType.LIFE_SHARE,
+            session_id, topic="查", origin_type=OriginType.CASUAL_GREETING,
         )
         loaded = episodes.get_episode(record.id)
         assert loaded is not None
@@ -849,7 +849,7 @@ def test_schema_version_is_52():
         row = conn.execute(
             "SELECT value FROM schema_meta WHERE key='schema_version'"
         ).fetchone()
-        assert row[0] == "82"
+        assert row[0] == "84"
     finally:
         conn.close()
 
@@ -917,7 +917,7 @@ def test_contact_episodes_has_4_origin_types():
         OriginType.EXPECTED_RETURN,
         OriginType.EMOTIONAL_CARE,
         OriginType.MILESTONE,
-        OriginType.LIFE_SHARE,
+        OriginType.CASUAL_GREETING,
     ]
     conn = db.connect()
     try:

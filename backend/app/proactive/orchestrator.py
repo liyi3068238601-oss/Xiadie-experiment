@@ -13,7 +13,7 @@ import sqlite3
 from typing import Optional
 
 from .. import db
-from . import candidates, decision, episodes, expression, intensity, life_adapter, presence, settings
+from . import candidates, decision, episodes, expression, intensity, presence, settings
 from .run_ledger import compute_source_hash
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,6 @@ SOURCE_EMOTIONAL_CARE = "emotional_care"
 SOURCE_EPISODE_MILESTONE = "episode_milestone"
 SOURCE_SAGA_MILESTONE = "saga_milestone"
 SOURCE_CASUAL_GREETING = "casual_greeting"
-SOURCE_LIFE_SEED = "life_seed"
 MILESTONE_CURSOR_KEY = "proactive_milestone_cursor"
 MILESTONE_CURSOR_BACKUP_KEY = "proactive_milestone_cursor_backup"
 
@@ -106,7 +105,7 @@ def enqueue_after_chat(
             source_hash=snapshot[1],
             payload={
                 "topic": "轻量问候", "open_thread": None,
-                "origin_type": episodes.OriginType.LIFE_SHARE,
+                "origin_type": episodes.OriginType.CASUAL_GREETING,
                 "candidate_kind": candidates.CandidateKind.CASUAL_GREETING,
             },
             due_at=due, expires_at=due + 16 * 3600, now=now,
@@ -158,30 +157,6 @@ def enqueue_memory_milestone(
             "topic": snapshot[2], "open_thread": None,
             "origin_type": episodes.OriginType.MILESTONE,
             "candidate_kind": candidates.CandidateKind.MILESTONE_FOLLOWUP,
-        },
-        due_at=due, expires_at=due + 7 * 24 * 3600, now=now,
-    )
-    wake_worker()
-    return record
-
-
-def enqueue_life_seed_fixture(
-    *, session_id: str, seed_id: str, due_at: Optional[float] = None,
-    now: Optional[float] = None,
-) -> Optional[dict]:
-    """R3 fixture/adapter: a LIFE seed may create only an EAP source."""
-    now = db.now() if now is None else now
-    snapshot = _life_snapshot(seed_id)
-    if not snapshot:
-        return None
-    due = now if due_at is None else due_at
-    record = enqueue_source(
-        session_id=session_id, source_kind=SOURCE_LIFE_SEED, source_ref_id=seed_id,
-        source_revision=snapshot[0], source_hash=snapshot[1],
-        payload={
-            "topic": snapshot[2], "open_thread": None,
-            "origin_type": snapshot[3],
-            "candidate_kind": candidates.CandidateKind.LIFE_SHARE,
         },
         due_at=due, expires_at=due + 7 * 24 * 3600, now=now,
     )
@@ -484,10 +459,6 @@ def _materialize_source(source: dict, now: float) -> None:
             conn.close()
         if changed != 1:
             return
-        if (source["source_kind"] == SOURCE_LIFE_SEED
-                and life_adapter.get_seed(source["source_ref_id"]).consumed_at is None):
-            life_adapter.consume_seed(source["source_ref_id"], episode_id=episode.id,
-                                      candidate_id=candidate.id, now=now)
     except sqlite3.OperationalError:  # transient database failure: retry idempotently
         logger.exception("proactive_source_materialization_failed source_id=%s", source["id"])
         _finish_source(source["id"], "queued", "materialization_failed", now,
@@ -752,8 +723,6 @@ def _current_snapshot(kind: str, ref_id: str):
         return _memory_snapshot(kind, ref_id)
     if kind == SOURCE_CASUAL_GREETING:
         return _message_snapshot(ref_id)
-    if kind == SOURCE_LIFE_SEED:
-        return _life_snapshot(ref_id)
     return None
 
 
@@ -825,21 +794,6 @@ def _memory_snapshot(kind: str, source_id: str):
         return digest, digest, row["title"]
     finally:
         conn.close()
-
-
-def _life_snapshot(seed_id: str):
-    seed = life_adapter.get_seed(seed_id)
-    if not seed or seed.rejected_at is not None:
-        return None
-    value = {
-        "id": seed.id, "source_event_type": seed.source_event_type,
-        "source_event_id": seed.source_event_id,
-        "summary": seed.source_event_summary, "topic": seed.topic,
-        "origin_type": seed.origin_type, "source_revision": seed.source_revision,
-        "source_hash": seed.source_hash,
-    }
-    digest = _hash(value)
-    return seed.source_revision or digest, digest, seed.topic, seed.origin_type
 
 
 def list_runtime_sources(limit: int = 100) -> list[dict]:

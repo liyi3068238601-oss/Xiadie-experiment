@@ -12,7 +12,7 @@ DECISION_KIND = "kig_query_planner"
 POLICY_VERSION = "query-plan-policy-v1"
 INPUT_VERSION = "query-plan-input-v1"
 OUTPUT_VERSION = "query-plan-result-v1"
-SOURCES = ("knowledge", "memory", "history", "life", "task", "lore")
+SOURCES = ("knowledge", "memory", "history", "task", "lore")
 MAX_SUBQUERIES = 4
 MAX_QUERY_CHARS = 160
 REASON_CODES = frozenset({
@@ -106,7 +106,7 @@ def plan_programmatic(payload: QueryPlanInput) -> QueryPlanResult | None:
         (_EXACT, ("history", "knowledge"), "exact_quote_query"),
         (_CONFLICT, ("knowledge", "memory", "history"), "conflict_query"),
         (_VERSION, ("knowledge",), "version_query"),
-        (_TEMPORAL, ("life", "history", "memory"), "temporal_query"),
+        (_TEMPORAL, ("history", "memory", "task"), "temporal_query"),
         (_ENTITY, ("knowledge", "memory", "history"), "entity_query"),
         (_MULTI, SOURCES, "multi_source_query"),
     ]

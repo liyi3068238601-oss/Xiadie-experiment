@@ -8,13 +8,11 @@ import { TasksPage } from "./components/TasksPage";
 import { MemoriesPage } from "./components/MemoriesPage";
 import { FilesPage } from "./components/FilesPage";
 import { ToolLogsPage } from "./components/ToolLogsPage";
-import { LifePage } from "./components/LifePage";
 import { Icon, type IconName } from "./components/Icon";
 
 const NAV: { view: View; ico: IconName; label: string }[] = [
   { view: "chat", ico: "chat", label: "陪伴 · 对话" },
   { view: "tasks", ico: "task", label: "今日任务" },
-  { view: "life", ico: "life", label: "今日生活" },
   { view: "memories", ico: "memory", label: "记忆与关系" },
   { view: "files", ico: "folder", label: "文件与知识" },
   { view: "tools", ico: "tool", label: "运行日志" },
@@ -251,7 +249,6 @@ export default function App() {
             <SettingsPage onModelChanged={refreshModel} currentSessionId={activeSession} />
           )}
           {view === "tasks" && <TasksPage />}
-          {view === "life" && <LifePage />}
           {view === "memories" && <MemoriesPage onOpenSource={openMemorySource} />}
           {view === "files" && <FilesPage />}
           {view === "tools" && <ToolLogsPage />}

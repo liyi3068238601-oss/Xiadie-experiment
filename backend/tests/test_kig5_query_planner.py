@@ -60,7 +60,7 @@ def test_ordinary_clear_query_defaults_to_knowledge_without_model(monkeypatch):
 
 
 @pytest.mark.parametrize(("text", "expected", "flag"), [
-    ("上周发生了什么，按时间线整理", {"life", "history", "memory"}, "temporal_required"),
+        ("上周发生了什么，按时间线整理", {"history", "memory", "task"}, "temporal_required"),
     ("这个项目最新版本和旧版有什么变化", {"knowledge"}, "version_required"),
     ("张三与晨星项目是什么关系", {"knowledge", "memory", "history"}, "entity_required"),
     ("请给出我当时说的原话", {"history", "knowledge"}, "exact_quote_required"),
@@ -189,4 +189,4 @@ def test_registry_reuses_cds_shadow_without_schema_migration():
         ).fetchone()[0])
     finally:
         conn.close()
-    assert version == 82
+    assert version == 84

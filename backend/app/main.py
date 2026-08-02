@@ -21,14 +21,14 @@ from . import (
     cognition_settings, companion_state, context_assembler, context_budget,
     context_controls, context_diagnostics, conversation_summaries,
     context_contributions, conversation_summary_service, db, cie_settings,
-    diary, entities, episode_consolidator, history_recall, important_dates, inner_state_projection,
+    entities, episode_consolidator, history_recall,
     episode_summary_service, episodes, knowledge, knowledge_cleanup, knowledge_context,
     knowledge_embeddings, knowledge_grants,
     knowledge_management, knowledge_parser, knowledge_policy, knowledge_recall, knowledge_recall_service, knowledge_search,
-    knowledge_worker, kig_evidence, kig_governance, kig_maintenance, kig_pipeline, kig_sources, life_catchup, life_catchup_service, life_events, life_runtime, life_schedule, llm, lore, memory, memory_conflicts, memory_shadow_proposals,
-    personal_goals, persona, persona_output_guard, persona_v2, runtime_logs, short_memo, worldbook_r1,
+    knowledge_worker, kig_evidence, kig_governance, kig_maintenance, kig_pipeline, kig_sources, llm, lore, memory, memory_conflicts, memory_shadow_proposals,
+    persona, persona_output_guard, persona_v2, runtime_logs, short_memo, worldbook_r1,
     saga_consolidator, saga_lifecycle, saga_summary,
-    saga_summary_service, secret_store, self_timeline, slow_lifecycle, turn_ingress,
+    saga_summary_service, secret_store, slow_lifecycle, turn_ingress,
     chat_request_control, image_attachments, vision_capabilities,
 )
 from . import candidate_reranker_shadow  # noqa: F401
@@ -36,7 +36,6 @@ from . import presence_thread_shadow  # noqa: F401 - registers CDS.3 Shadow cont
 from . import recall_planner_shadow  # noqa: F401 - registers CDS.4 Shadow contract
 from . import context_planner_shadow  # noqa: F401 - registers CDS.7 Shadow contract
 from . import episode_saga_shadow  # noqa: F401 - registers CDS.10 Shadow contracts
-from . import life_decisions  # noqa: F401 - registers LIFE.1 Shadow contracts on CDS
 from . import information_classifier_shadow  # noqa: F401 - registers KIG.3 Shadow contract
 from . import knowledge_boundary_shadow  # noqa: F401 - registers KIG.4 Shadow contract
 from . import kig_query_planner  # noqa: F401 - registers KIG.5 Shadow contract
@@ -89,13 +88,11 @@ def cleanup_orphan_attachments(max_age_seconds: float = 3600) -> int:
 async def lifespan(app: FastAPI):
     db.init_db()
     cognition_runtime.recover_control_plane()
-    await life_catchup_service.start()
     # 启动时清理上一次运行遗留的孤儿附件（message_id IS NULL 且超过 1 小时）
     cleanup_orphan_attachments()
     image_attachments.cleanup_expired()
     conversation_summaries.recover_stale_runs()
     await conversation_summary_service.start_worker()
-    await affect_observer_service.start_worker()
     await companion_cognition_service.start_worker()
     await proactive_orchestrator.start_worker()
     await memory_observer_service.start_worker()
@@ -108,7 +105,6 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        await life_catchup_service.stop()
         knowledge_recall_service.stop_worker()
         await kig_maintenance.stop_worker()
         await knowledge_worker.stop_worker()
@@ -118,7 +114,6 @@ async def lifespan(app: FastAPI):
         await memory_observer_service.stop_worker()
         await proactive_orchestrator.stop_worker()
         await companion_cognition_service.stop_worker()
-        await affect_observer_service.stop_worker()
         await conversation_summary_service.stop_worker()
 
 
@@ -907,34 +902,8 @@ async def chat(body: ChatIn) -> StreamingResponse:
             ("", []) if temporary_chat else memory.build_digest(effective_content)
         )
         current_state = companion_state.get_state(persist_advance=False)
-        next_state = (
-            current_state
-            if body.regenerate
-            else companion_state.preview_interaction(anchored_content, current_state)
-        )
+        next_state = companion_state.preview_current_turn(anchored_content, current_state)
         style = companion_state.get_style_guidance(next_state)
-        projection_rollout = inner_state_projection.rollout_mode()
-        projection_mapping = None
-        if projection_rollout != "off":
-            try:
-                request_mode = body.persona_mode or "companionship"
-                projection = inner_state_projection.build(
-                    state=next_state,
-                    goals=personal_goals.list_goals(limit=20),
-                    sagas=saga_lifecycle.list_sagas(status="active", limit=2),
-                    life_events=life_events.list_events(limit=3),
-                    short_memos=short_memo_items,
-                    request_mode=request_mode,
-                    current_intent=inner_state_projection.classify_current_intent(
-                        effective_content, request_mode=request_mode,
-                    ),
-                )
-                projection_mapping = projection.as_mapping() if projection else None
-            except Exception:  # request-local expression hints must never block chat
-                logger.warning(
-                    "inner_state_projection_failed session_id=%s", body.session_id, exc_info=True,
-                )
-                projection_mapping = None
         try:
             persona_compilation = persona_v2.compile_for_request(
                 legacy_prompt=persona.PERSONA_PROMPT,
@@ -942,8 +911,6 @@ async def chat(body: ChatIn) -> StreamingResponse:
                 style=body.persona_style,
                 provider=provider,
                 model=model,
-                projection=projection_mapping,
-                projection_rollout_mode=projection_rollout,
             )
         except persona_v2.PersonaResourceError as exc:
             raise HTTPException(422, str(exc)) from exc
@@ -1087,9 +1054,7 @@ async def chat(body: ChatIn) -> StreamingResponse:
             if parts:
                 attachment_block = "\n\n".join(parts)
         knowledge_block = knowledge_context.prompt_block(knowledge_retrieval)
-        self_timeline.refresh(conn=conn)
-        timeline_block = self_timeline.context_block(effective_content)
-        effective_lore_digest = "\n\n".join(part for part in (lore_digest, timeline_block) if part)
+        effective_lore_digest = lore_digest
         if knowledge_retrieval:
             conn.execute(
                 "INSERT INTO knowledge_chat_retrievals("
@@ -1470,15 +1435,10 @@ async def chat(body: ChatIn) -> StreamingResponse:
                 "companion_cognition": None,
                 "memory_observation": None,
             })
-        saved_companion_state = None
+        saved_companion_state = next_state
         affect_observation = None
         memory_observation = None
         if not body.regenerate and not temporary_chat:
-            saved_companion_state = companion_state.commit_interaction(
-                anchored_content,
-                source_session_id=body.session_id,
-                source_message_id=anchored_uid,
-            )
             try:
                 memory_observation = memory_observer_service.enqueue_turn(
                     chat_provider=provider,
@@ -1772,40 +1732,7 @@ def resolve_kig_version_relation(relation_id: str, body: KIGRelationResolveIn) -
                             detail={"code": code, "message": code}) from exc
 
 
-@app.get("/api/life/events")
-def get_life_events(include_revoked: bool = False, limit: int = 100) -> dict:
-    """Read-only LIFE.2 fact-layer projection; mutation remains domain-owned."""
-    return {"items": life_events.list_events(include_revoked=include_revoked, limit=limit)}
-
-
-@app.get("/api/life/events/diagnostics")
-def get_life_event_diagnostics(event_id: str | None = None, limit: int = 200) -> dict:
-    return {"items": life_events.diagnostics(event_id=event_id, limit=limit)}
-
-
-@app.get("/api/life/state")
-def get_life_state() -> dict:
-    state = life_runtime.get_state()
-    if state is None:
-        return {"initialized": False, "algorithm_version": life_runtime.ALGORITHM_VERSION}
-    return {
-        "initialized": True, "algorithm_version": life_runtime.ALGORITHM_VERSION,
-        "revision": state.revision, "logical_time": state.logical_time,
-        "timezone_id": state.timezone_id, "current_activity": state.current_activity,
-        "activity_since": state.activity_since, "energy": state.energy, "focus": state.focus,
-        "rest_need": state.rest_need, "social_openness": state.social_openness,
-        "conservative_mode": state.conservative_mode, "anomaly_code": state.anomaly_code,
-    }
-
-
-@app.get("/api/life/schedules/{local_date}")
-def get_life_schedule(local_date: str, timezone_id: str = "Asia/Shanghai") -> dict:
-    schedule = life_schedule.get_active_schedule(local_date=local_date, timezone_id=timezone_id)
-    return {"item": schedule}
-
-
-class LifeSettingsIn(BaseModel):
-    mode: str | None = None
+class AssistantShortMemoSettingsIn(BaseModel):
     short_memo_enabled: bool | None = None
     short_memo_remote_extraction_enabled: bool | None = None
     short_memo_default_ttl_seconds: int | None = None
@@ -1821,72 +1748,30 @@ class ShortMemoClearIn(BaseModel):
     privacy: bool = False
 
 
-class LifeDiaryUpdateIn(BaseModel):
-    expected_revision: int = Field(ge=1)
-    title: str = Field(min_length=1, max_length=160)
-    body: str = Field(min_length=1, max_length=8_000)
+@app.get("/api/assistant/short-memo-settings")
+def get_assistant_short_memo_settings() -> dict:
+    return {"short_memo": short_memo.rollout_snapshot().public()}
 
 
-class LifeDateCreateIn(BaseModel):
-    label: str = Field(min_length=1, max_length=160)
-    recurrence: str = "yearly_solar"
-    date_year: int | None = None
-    date_month: int = Field(ge=1, le=12)
-    date_day: int = Field(ge=1, le=31)
-    timezone_id: str = Field(default="Asia/Shanghai", min_length=1, max_length=100)
-    celebration_policy: str = "natural"
-
-
-class LifeDateUpdateIn(BaseModel):
-    expected_revision: int = Field(ge=1)
-    label: str = Field(min_length=1, max_length=160)
-    celebration_policy: str
-
-
-class LifeGoalCreateIn(BaseModel):
-    title: str = Field(min_length=1, max_length=160)
-    priority: int = Field(default=3, ge=1, le=5)
-
-
-class LifeGoalUpdateIn(BaseModel):
-    expected_revision: int = Field(ge=1)
-    title: str | None = Field(default=None, min_length=1, max_length=160)
-    status: str | None = None
-
-
-@app.get("/api/life/settings")
-def get_life_settings() -> dict:
-    mode = life_catchup.get_mode()
-    return {
-        "mode": mode,
-        "offline_continuity_default": life_catchup.MODE_CONTINUOUS,
-        "short_memo": short_memo.rollout_snapshot().public(),
-    }
-
-
-@app.patch("/api/life/settings")
-def update_life_settings(body: LifeSettingsIn) -> dict:
+@app.patch("/api/assistant/short-memo-settings")
+def update_assistant_short_memo_settings(body: AssistantShortMemoSettingsIn) -> dict:
     try:
-        if body.mode is not None:
-            life_catchup.set_mode(body.mode)
         short_memo.update_product_settings(
             enabled=body.short_memo_enabled,
             remote_extraction_enabled=body.short_memo_remote_extraction_enabled,
             default_ttl_seconds=body.short_memo_default_ttl_seconds,
         )
-        return get_life_settings()
-    except life_catchup.CatchUpError as exc:
-        raise HTTPException(400, detail=exc.code) from exc
+        return get_assistant_short_memo_settings()
     except short_memo.ShortMemoError as exc:
         raise HTTPException(400, detail=exc.code) from exc
 
 
-@app.get("/api/life/short-memos")
+@app.get("/api/assistant/short-memos")
 def list_short_memos() -> dict:
     return {"items": short_memo.list_active()}
 
 
-@app.patch("/api/life/short-memos/{memo_id}")
+@app.patch("/api/assistant/short-memos/{memo_id}")
 def update_short_memo(memo_id: str, body: ShortMemoUpdateIn) -> dict:
     try:
         return short_memo.update_expiry(
@@ -1897,190 +1782,17 @@ def update_short_memo(memo_id: str, body: ShortMemoUpdateIn) -> dict:
         raise HTTPException(status, detail=exc.code) from exc
 
 
-@app.delete("/api/life/short-memos/{memo_id}")
+@app.delete("/api/assistant/short-memos/{memo_id}")
 def delete_short_memo(memo_id: str) -> dict:
     return {"deleted": short_memo.delete(memo_id)}
 
 
-@app.delete("/api/life/short-memos")
+@app.delete("/api/assistant/short-memos")
 def clear_short_memos(body: ShortMemoClearIn | None = None) -> dict:
     options = body or ShortMemoClearIn()
     return {"deleted_count": short_memo.clear(
         clear_events=options.clear_events, privacy=options.privacy,
     )}
-
-
-@app.get("/api/life/diary")
-def list_life_diary(include_revoked: bool = False, limit: int = 100) -> dict:
-    return {"items": diary.list_entries(include_revoked=include_revoked, limit=limit)}
-
-
-@app.patch("/api/life/diary/{item_id}")
-def update_life_diary(item_id: str, body: LifeDiaryUpdateIn) -> dict:
-    try:
-        return diary.revise_entry(
-            item_id, expected_revision=body.expected_revision, title=body.title,
-            body=body.body, reason_code="user_edited",
-        )
-    except diary.DiaryError as exc:
-        raise HTTPException(409, detail=exc.code) from exc
-
-
-@app.delete("/api/life/diary/{item_id}")
-def delete_life_diary(item_id: str, expected_revision: int) -> dict:
-    try:
-        return diary.revoke_entry(item_id, expected_revision=expected_revision)
-    except diary.DiaryError as exc:
-        raise HTTPException(409, detail=exc.code) from exc
-
-
-@app.get("/api/life/dates")
-def list_life_dates(include_revoked: bool = False, limit: int = 100) -> dict:
-    return {"items": important_dates.list_dates(include_revoked=include_revoked, limit=limit)}
-
-
-@app.post("/api/life/dates")
-def create_life_date(body: LifeDateCreateIn) -> dict:
-    source_id = db.new_id()
-    source_hash = hashlib.sha256(
-        json.dumps(body.model_dump(), ensure_ascii=False, sort_keys=True).encode()
-    ).hexdigest()
-    try:
-        item = important_dates.create_candidate(
-            label=body.label, recurrence=body.recurrence, date_year=body.date_year,
-            date_month=body.date_month, date_day=body.date_day, timezone_id=body.timezone_id,
-            confidence=1, source_kind="manual", source_id=source_id, source_revision="1",
-            source_hash=source_hash, celebration_policy=body.celebration_policy,
-        )
-        return important_dates.confirm(
-            item["id"], expected_revision=item["revision"], date_year=body.date_year,
-            date_month=body.date_month, date_day=body.date_day,
-        )
-    except important_dates.ImportantDateError as exc:
-        raise HTTPException(400, detail=exc.code) from exc
-
-
-@app.patch("/api/life/dates/{item_id}")
-def update_life_date(item_id: str, body: LifeDateUpdateIn) -> dict:
-    try:
-        return important_dates.revise(
-            item_id, expected_revision=body.expected_revision, label=body.label,
-            celebration_policy=body.celebration_policy,
-        )
-    except important_dates.ImportantDateError as exc:
-        raise HTTPException(409, detail=exc.code) from exc
-
-
-@app.delete("/api/life/dates/{item_id}")
-def delete_life_date(item_id: str, expected_revision: int) -> dict:
-    try:
-        return important_dates.revoke(item_id, expected_revision=expected_revision)
-    except important_dates.ImportantDateError as exc:
-        raise HTTPException(409, detail=exc.code) from exc
-
-
-@app.get("/api/life/goals")
-def list_life_goals(include_revoked: bool = False, limit: int = 100) -> dict:
-    return {"items": personal_goals.list_goals(include_revoked=include_revoked, limit=limit)}
-
-
-@app.post("/api/life/goals")
-def create_life_goal(body: LifeGoalCreateIn) -> dict:
-    source_id = db.new_id()
-    source_hash = hashlib.sha256(body.title.encode()).hexdigest()
-    try:
-        item = personal_goals.create_candidate(
-            title=body.title, priority=body.priority, confidence=1,
-            source_kind="user_explicit", source_id=source_id, source_revision="1",
-            source_hash=source_hash, explicit_confirmation=True,
-        )
-        return personal_goals.transition(
-            item["id"], expected_revision=item["revision"], to_status="active",
-            reason_code="user_created",
-        )
-    except personal_goals.GoalError as exc:
-        raise HTTPException(400, detail=exc.code) from exc
-
-
-@app.patch("/api/life/goals/{item_id}")
-def update_life_goal(item_id: str, body: LifeGoalUpdateIn) -> dict:
-    revision = body.expected_revision
-    try:
-        item = personal_goals.get_goal(item_id)
-        if not item or item["revision"] != revision:
-            raise personal_goals.GoalError("revision_conflict", "goal changed")
-        if body.title is not None and body.title != item["title"]:
-            item = personal_goals.rename(item_id, expected_revision=revision, title=body.title)
-            revision = item["revision"]
-        if body.status is not None and body.status != item["status"]:
-            item = personal_goals.transition(
-                item_id, expected_revision=revision, to_status=body.status,
-                reason_code="user_changed_status",
-            )
-        return item
-    except personal_goals.GoalError as exc:
-        raise HTTPException(409, detail=exc.code) from exc
-
-
-@app.delete("/api/life/goals/{item_id}")
-def delete_life_goal(item_id: str, expected_revision: int) -> dict:
-    try:
-        return personal_goals.transition(
-            item_id, expected_revision=expected_revision, to_status="revoked",
-            reason_code="user_deleted",
-        )
-    except personal_goals.GoalError as exc:
-        raise HTTPException(409, detail=exc.code) from exc
-
-
-@app.post("/api/life/rebuild")
-def rebuild_life_views() -> dict:
-    affected_diaries = diary.rebuild_invalid_sources()
-    indexed = self_timeline.refresh()
-    return {"affected_diaries": affected_diaries, "timeline_entries": indexed}
-
-
-@app.get("/api/life/export")
-def export_life_data() -> dict:
-    return {
-        "export_version": "life-export-v2", "exported_at": db.now(),
-        "settings": get_life_settings(), "state": get_life_state(),
-        "events": life_events.list_events(include_revoked=True, limit=500),
-        "diary": diary.list_entries(include_revoked=True, limit=500),
-        "important_dates": important_dates.list_dates(include_revoked=True, limit=500),
-        "personal_goals": personal_goals.list_goals(include_revoked=True, limit=500),
-        "short_memo": short_memo.export_data(),
-    }
-
-
-@app.get("/api/life/diagnostics")
-def get_life_diagnostics() -> dict:
-    state = life_runtime.get_state()
-    conn = db.connect()
-    try:
-        schema_row = conn.execute(
-            "SELECT value FROM schema_meta WHERE key='schema_version'"
-        ).fetchone()
-        counts = {
-            table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-            for table in (
-                "life_events", "diary_entries", "important_dates", "personal_goals",
-                "short_memos", "short_memo_events",
-            )
-        }
-        sources = [dict(row) for row in conn.execute(
-            "SELECT source_type,source_id,source_revision,source_status FROM self_timeline_entries "
-            "ORDER BY indexed_at DESC,id DESC LIMIT 20"
-        ).fetchall()]
-    finally:
-        conn.close()
-    return {
-        "schema_version": schema_row["value"] if schema_row else "unknown",
-        "state_revision": state.revision if state else None,
-        "state_algorithm": state.algorithm_version if state else life_runtime.ALGORITHM_VERSION,
-        "anomaly_code": state.anomaly_code if state else None,
-        "counts": counts, "sources": sources, "short_memo": short_memo.diagnostics(),
-    }
 
 
 class CognitionFeedbackIn(BaseModel):
@@ -2172,15 +1884,6 @@ def notify_proactive_system_resume() -> dict:
 @app.post("/api/companion-state/reset")
 def reset_companion_state() -> dict:
     return companion_state.reset_state()
-
-
-class CompanionTickIn(BaseModel):
-    minutes: float = Field(gt=0, le=7 * 24 * 60)
-
-
-@app.post("/api/companion-state/tick")
-def tick_companion_state(body: CompanionTickIn) -> dict:
-    return companion_state.tick(body.minutes)
 
 
 @app.get("/api/companion-state/events")

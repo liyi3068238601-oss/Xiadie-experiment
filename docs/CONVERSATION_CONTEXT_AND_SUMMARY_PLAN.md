@@ -1,5 +1,7 @@
 # 遐蝶对话上下文、会话摘要与跨会话回忆施工计划
 
+> 助手优先边界（2026-08-01）：CTX 完整保留并继续拥有最终 ContextPackage。允许来源收敛为 Persona、当前会话、摘要、历史、MEM、Knowledge、KIG、ShortMemo、Task、附件和治理后的第三方贡献；不再接受 LIFE、SelfTimeline 或 InnerStateProjection。
+
 > 文档状态：施工前计划，尚未开始实现  
 > 适用范围：不限总长度的对话档案、最高 1M tokens 动态上下文窗口、会话滚动摘要、跨会话历史回忆及其聊天接入
 > 不包含：SecretStore 迁移、ToolRegistry、MCP、多 Agent、外部平台和桌面自动化  

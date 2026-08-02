@@ -12,12 +12,11 @@ from typing import Callable
 
 from . import db, history_recall, kig_sources, knowledge_search, lore, memory
 
-SOURCES = ("knowledge", "memory", "history", "life", "task", "lore")
+SOURCES = ("knowledge", "memory", "history", "task", "lore")
 SOURCE_KINDS = {
     "knowledge": frozenset({"knowledge_chunk"}),
     "memory": frozenset({"memory_fragment"}),
     "history": frozenset({"message"}),
-    "life": frozenset({"life_event"}),
     "task": frozenset({"tool_run"}),
     "lore": frozenset({"lore_section"}),
 }
@@ -284,33 +283,6 @@ def _history(request: RetrievalRequest, limit: int) -> tuple[list[RetrievalCandi
     return result, {"retrieval_mode": "fts", "lexical_fallback": False}
 
 
-def _life(request: RetrievalRequest, limit: int) -> tuple[list[RetrievalCandidate], dict]:
-    terms = _terms(request.query)
-    if not terms:
-        return [], {"retrieval_mode": "like", "lexical_fallback": False}
-    clauses = " OR ".join("summary LIKE ?" for _ in terms)
-    conn = db.connect()
-    try:
-        rows = conn.execute(
-            "SELECT * FROM self_timeline_entries WHERE source_type='life_event' "
-            "AND source_status NOT IN ('revoked','disabled','private') AND (" + clauses + ") "
-            "ORDER BY occurred_at DESC LIMIT ?",
-            tuple(f"%{term}%" for term in terms) + (limit * 2,),
-        ).fetchall()
-    finally:
-        conn.close()
-    result = []
-    for rank, row in enumerate(rows, start=1):
-        item = dict(row)
-        ref = kig_sources.registry.resolve("life_event", item["source_id"])
-        result.append(_candidate(
-            source="life", ref=ref, excerpt=item["summary"], lexical_score=1.0 / rank,
-            vector_score=None, occurred_at=float(item["occurred_at"]),
-            authority="life_ledger", metadata={"world_layer": item["world_layer"]},
-        ))
-    return result, {"retrieval_mode": "like", "lexical_fallback": False}
-
-
 def _task(request: RetrievalRequest, limit: int) -> tuple[list[RetrievalCandidate], dict]:
     terms = _terms(request.query)
     if not terms:
@@ -353,7 +325,7 @@ def _lore(request: RetrievalRequest, limit: int) -> tuple[list[RetrievalCandidat
 
 ADAPTERS: dict[str, Adapter] = {
     "knowledge": _knowledge, "memory": _memory, "history": _history,
-    "life": _life, "task": _task, "lore": _lore,
+    "task": _task, "lore": _lore,
 }
 
 
