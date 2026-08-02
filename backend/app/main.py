@@ -8,7 +8,7 @@ import json
 import logging
 import time
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Literal, Optional
 from urllib.parse import unquote
 
 from fastapi import FastAPI, HTTPException, Request
@@ -3337,26 +3337,28 @@ class TaskPlanNodeIn(BaseModel):
 class TaskPlanIn(BaseModel):
     nodes: list[TaskPlanNodeIn] = Field(min_length=1, max_length=50)
     requires_approval: bool = False
-    expected_revision: Optional[int] = Field(default=None, ge=1)
+    expected_revision: int = Field(ge=1)
 
 
 class TaskRunRevisionIn(BaseModel):
-    expected_revision: Optional[int] = Field(default=None, ge=1)
+    expected_revision: int = Field(ge=1)
 
 
 class TaskNodeActionIn(BaseModel):
-    action: str
-    expected_revision: Optional[int] = Field(default=None, ge=1)
+    action: Literal["start", "succeed", "fail", "skip"]
+    expected_revision: int = Field(ge=1)
     output_summary: str = Field(default="", max_length=500)
     error_code: Optional[str] = Field(default=None, max_length=120)
     error_message: Optional[str] = Field(default=None, max_length=500)
+    reason_code: Optional[str] = Field(default=None, max_length=120)
+    reason_summary: str = Field(default="", max_length=240)
 
 
 class TaskArtifactLinkIn(BaseModel):
     artifact_id: str = Field(min_length=1, max_length=120)
     node_id: Optional[str] = None
     label: str = Field(default="", max_length=120)
-    expected_revision: Optional[int] = Field(default=None, ge=1)
+    expected_revision: int = Field(ge=1)
 
 
 def _task_run_call(operation):
@@ -3364,7 +3366,9 @@ def _task_run_call(operation):
         return operation()
     except task_runs.TaskRunConflict as error:
         raise HTTPException(409, {
-            "code": "task_run_revision_conflict",
+            "code": error.code,
+            "message": error.message,
+            "retry": error.retry,
             "current": error.current,
         }) from error
     except task_runs.TaskRunError as error:
@@ -3474,44 +3478,44 @@ def replace_task_run_plan(run_id: str, body: TaskPlanIn) -> dict:
 
 
 @app.post("/api/task-runs/{run_id}/approve")
-def approve_task_run(run_id: str, body: Optional[TaskRunRevisionIn] = None) -> dict:
+def approve_task_run(run_id: str, body: TaskRunRevisionIn) -> dict:
     return _task_run_call(lambda: task_runs.approve(
-        run_id, expected_revision=body.expected_revision if body else None,
+        run_id, expected_revision=body.expected_revision,
     ))
 
 
 @app.post("/api/task-runs/{run_id}/start")
-def start_task_run(run_id: str, body: Optional[TaskRunRevisionIn] = None) -> dict:
+def start_task_run(run_id: str, body: TaskRunRevisionIn) -> dict:
     return _task_run_call(lambda: task_runs.start(
-        run_id, expected_revision=body.expected_revision if body else None,
+        run_id, expected_revision=body.expected_revision,
     ))
 
 
 @app.post("/api/task-runs/{run_id}/pause")
-def pause_task_run(run_id: str, body: Optional[TaskRunRevisionIn] = None) -> dict:
+def pause_task_run(run_id: str, body: TaskRunRevisionIn) -> dict:
     return _task_run_call(lambda: task_runs.pause(
-        run_id, expected_revision=body.expected_revision if body else None,
+        run_id, expected_revision=body.expected_revision,
     ))
 
 
 @app.post("/api/task-runs/{run_id}/resume")
-def resume_task_run(run_id: str, body: Optional[TaskRunRevisionIn] = None) -> dict:
+def resume_task_run(run_id: str, body: TaskRunRevisionIn) -> dict:
     return _task_run_call(lambda: task_runs.resume(
-        run_id, expected_revision=body.expected_revision if body else None,
+        run_id, expected_revision=body.expected_revision,
     ))
 
 
 @app.post("/api/task-runs/{run_id}/cancel")
-def cancel_task_run(run_id: str, body: Optional[TaskRunRevisionIn] = None) -> dict:
+def cancel_task_run(run_id: str, body: TaskRunRevisionIn) -> dict:
     return _task_run_call(lambda: task_runs.cancel(
-        run_id, expected_revision=body.expected_revision if body else None,
+        run_id, expected_revision=body.expected_revision,
     ))
 
 
 @app.post("/api/task-runs/{run_id}/replan")
-def replan_task_run(run_id: str, body: Optional[TaskRunRevisionIn] = None) -> dict:
+def replan_task_run(run_id: str, body: TaskRunRevisionIn) -> dict:
     return _task_run_call(lambda: task_runs.replan(
-        run_id, expected_revision=body.expected_revision if body else None,
+        run_id, expected_revision=body.expected_revision,
     ))
 
 
@@ -3520,6 +3524,7 @@ def act_on_task_node(run_id: str, node_id: str, body: TaskNodeActionIn) -> dict:
     return _task_run_call(lambda: task_runs.transition_node(
         run_id, node_id, body.action, output_summary=body.output_summary,
         error_code=body.error_code, error_message=body.error_message,
+        reason_code=body.reason_code, reason_summary=body.reason_summary,
         expected_revision=body.expected_revision,
     ))
 

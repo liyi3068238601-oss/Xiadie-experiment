@@ -1,25 +1,15 @@
-"""Durable TaskRun and TaskNode state machine for the CYR.2 workbench."""
+"""Durable TaskRun and TaskNode aggregate writer for the CYR.2 workbench."""
 from __future__ import annotations
 
 import json
 from typing import Any
 
-from . import db
+from . import db, task_run_contract as contract
 from .observability import bind_context, log_event, new_trace_id
 from .observability.redaction import redact_text
 
-RUN_TERMINAL = frozenset({"completed", "cancelled"})
-RUN_TRANSITIONS: dict[str, set[str]] = {
-    "draft": {"planning", "ready", "awaiting_approval", "cancelled"},
-    "planning": {"ready", "awaiting_approval", "failed", "cancelled"},
-    "awaiting_approval": {"ready", "planning", "cancelled"},
-    "ready": {"running", "planning", "cancelled"},
-    "running": {"paused", "planning", "completed", "failed", "cancelled", "recovery_required"},
-    "paused": {"running", "planning", "cancelled"},
-    "recovery_required": {"running", "paused", "planning", "failed", "cancelled"},
-    "failed": {"planning", "ready", "cancelled"},
-}
-NODE_TERMINAL = frozenset({"succeeded", "failed", "skipped", "cancelled"})
+RUN_TERMINAL = contract.RUN_TERMINAL
+NODE_TERMINAL = contract.NODE_TERMINAL
 MAX_NODES = 50
 
 
@@ -28,14 +18,28 @@ class TaskRunError(ValueError):
 
 
 class TaskRunConflict(TaskRunError):
-    def __init__(self, current: Any):
-        super().__init__("task_run_revision_conflict")
-        self.current = _decode_run(current)
+    def __init__(self, code: str, *, current: dict[str, Any] | None = None,
+                 run_id: str | None = None):
+        spec = contract.ERROR_SPECS[code]
+        super().__init__(code)
+        self.code = code
+        self.message = spec.message
+        self.retry = spec.retry
+        self.current = current
+        self.run_id = run_id
+
+    @classmethod
+    def from_decision(cls, decision: contract.Decision, *, run_id: str) -> "TaskRunConflict":
+        assert decision.code is not None
+        error = cls(decision.code, run_id=run_id)
+        error.message = decision.message or error.message
+        error.retry = decision.retry or error.retry
+        return error
 
 
-def _check_revision(run: Any, expected_revision: int | None) -> None:
-    if expected_revision is not None and int(run["revision"]) != int(expected_revision):
-        raise TaskRunConflict(run)
+class _MutationConflict(Exception):
+    def __init__(self, conflict: TaskRunConflict):
+        self.conflict = conflict
 
 
 def _text(value: object, limit: int) -> str:
@@ -71,6 +75,27 @@ def _log(run: Any, event: str, message: str, *, level: str = "INFO", **fields: A
     with bind_context(trace_id=run["trace_id"], task_run_id=run["id"],
                       session_id=run["source_session_id"] or ""):
         log_event("task.scheduler", level, event, message, fields=fields)
+
+
+def _log_conflict(error: TaskRunConflict) -> None:
+    current = error.current
+    if not current:
+        return
+    _log(current, "task_run_conflict", "Task run command rejected", level="WARNING",
+         code=error.code, retry=error.retry, status=current["status"],
+         revision=current["revision"])
+
+
+def _raise_decision(decision: contract.Decision, run_id: str) -> None:
+    if decision.outcome == "reject":
+        raise _MutationConflict(TaskRunConflict.from_decision(decision, run_id=run_id))
+
+
+def _finish_conflict(error: TaskRunConflict) -> None:
+    if error.run_id:
+        error.current = get(error.run_id)
+    _log_conflict(error)
+    raise error
 
 
 def create(*, task_id: str, goal_summary: str = "", source_session_id: str | None = None,
@@ -157,55 +182,95 @@ def get(run_id: str) -> dict[str, Any] | None:
         conn.close()
 
 
-def _validate_plan(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _normalize_plan(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if not nodes or len(nodes) > MAX_NODES:
-        raise TaskRunError("task_plan_node_count_invalid")
-    normalized: list[dict[str, Any]] = []
+        raise TaskRunConflict("task_plan_node_count_invalid")
+    prepared: list[dict[str, Any]] = []
     ids: set[str] = set()
     for index, raw in enumerate(nodes):
         client_id = _text(raw.get("client_id") or f"step-{index + 1}", 80)
         title = _text(raw.get("title"), 240)
         if not client_id or not title or client_id in ids:
-            raise TaskRunError("task_plan_node_invalid")
-        ids.add(client_id)
+            raise TaskRunConflict("task_plan_node_invalid")
         dependencies = raw.get("depends_on") or []
         if not isinstance(dependencies, list) or len(dependencies) > MAX_NODES:
-            raise TaskRunError("task_plan_dependencies_invalid")
-        normalized.append({"client_id": client_id, "title": title,
-                           "depends_on": [_text(item, 80) for item in dependencies],
-                           "completion_criteria": _text(raw.get("completion_criteria"), 500)})
+            raise TaskRunConflict("task_plan_dependencies_invalid")
+        ids.add(client_id)
+        prepared.append({
+            "client_id": client_id,
+            "title": title,
+            "raw_dependencies": [_text(item, 80) for item in dependencies],
+            "completion_criteria": _text(raw.get("completion_criteria"), 500),
+        })
+    positions = {item["client_id"]: position for position, item in enumerate(prepared)}
+    normalized: list[dict[str, Any]] = []
+    for item in prepared:
+        dependencies = item.pop("raw_dependencies")
+        if any(dep not in ids or dep == item["client_id"] for dep in dependencies):
+            raise TaskRunConflict("task_plan_dependency_unknown")
+        normalized.append({
+            **item,
+            "depends_on": sorted(set(dependencies), key=positions.__getitem__),
+        })
     graph = {item["client_id"]: item["depends_on"] for item in normalized}
-    if any(dep not in ids or dep == node for node, deps in graph.items() for dep in deps):
-        raise TaskRunError("task_plan_dependency_unknown")
     visiting: set[str] = set()
     visited: set[str] = set()
+
     def visit(node: str) -> None:
         if node in visiting:
-            raise TaskRunError("task_plan_cycle")
+            raise TaskRunConflict("task_plan_cycle")
         if node in visited:
             return
         visiting.add(node)
-        for dep in graph[node]:
-            visit(dep)
+        for dependency in graph[node]:
+            visit(dependency)
         visiting.remove(node)
         visited.add(node)
+
     for node in graph:
         visit(node)
     return normalized
 
 
-def replace_plan(run_id: str, nodes: list[dict[str, Any]], *, requires_approval: bool = False,
-                 expected_revision: int | None = None) -> dict[str, Any]:
+def _stored_plan(conn, run_id: str) -> list[dict[str, Any]]:
+    return [{
+        "client_id": row["client_id"],
+        "title": row["title"],
+        "depends_on": json.loads(row["depends_on_json"] or "[]"),
+        "completion_criteria": row["completion_criteria"],
+    } for row in conn.execute(
+        "SELECT * FROM task_nodes WHERE task_run_id=? ORDER BY position,id", (run_id,),
+    ).fetchall()]
+
+
+def replace_plan(run_id: str, nodes: list[dict[str, Any]], *, expected_revision: int,
+                 requires_approval: bool = False) -> dict[str, Any]:
     conn = db.connect()
     try:
         conn.execute("BEGIN IMMEDIATE")
         run = conn.execute("SELECT * FROM task_runs WHERE id=?", (run_id,)).fetchone()
         if run is None:
             raise TaskRunError("task_run_not_found")
-        _check_revision(run, expected_revision)
-        plan = _validate_plan(nodes)
-        if run["status"] not in {"draft", "planning", "paused", "recovery_required", "failed"}:
-            raise TaskRunError("task_plan_replace_not_allowed")
+        try:
+            plan = _normalize_plan(nodes)
+        except TaskRunConflict as error:
+            error.run_id = run_id
+            raise _MutationConflict(error) from error
+        decision = contract.decide_run(contract.RunCommandContext(
+            command="replace_plan", status=run["status"], revision=run["revision"],
+            expected_revision=expected_revision, plan_version=run["plan_version"],
+            requires_approval=bool(run["requires_approval"]),
+            approved_plan_version=run["approved_plan_version"],
+            plan_matches=(
+                _stored_plan(conn, run_id) == plan
+                and bool(run["requires_approval"]) == bool(requires_approval)
+            ),
+            has_started=run["started_at"] is not None,
+        ))
+        if decision.outcome == "idempotent":
+            conn.rollback()
+            return get(run_id) or _decode_run(run)
+        _raise_decision(decision, run_id)
         old_status = run["status"]
         conn.execute("DELETE FROM task_nodes WHERE task_run_id=?", (run_id,))
         now = db.now()
@@ -220,97 +285,113 @@ def replace_plan(run_id: str, nodes: list[dict[str, Any]], *, requires_approval:
         revision = int(run["revision"]) + 1
         plan_version = int(run["plan_version"]) + 1
         conn.execute(
-            "UPDATE task_runs SET status=?,revision=?,plan_version=?,progress_current=0,"
-            "progress_total=?,current_node_id=NULL,waiting_reason=?,next_action=?,error_code=NULL,"
-            "error_message=NULL,finished_at=NULL,updated_at=? WHERE id=?",
-            (target, revision, plan_version, len(plan), "等待用户批准" if requires_approval else "",
+            "UPDATE task_runs SET status=?,revision=?,plan_version=?,requires_approval=?,"
+            "approved_plan_version=NULL,approved_at=NULL,progress_current=0,progress_total=?,"
+            "current_node_id=NULL,waiting_reason=?,next_action=?,error_code=NULL,error_message=NULL,"
+            "finished_at=NULL,updated_at=? WHERE id=?",
+            (target, revision, plan_version, int(requires_approval), len(plan),
+             "等待用户批准" if requires_approval else "",
              "批准计划" if requires_approval else "开始执行", now, run_id),
         )
         _event(conn, run_id, "task_plan_replaced", from_status=old_status, to_status=target,
-               revision=revision, metadata={"plan_version": plan_version, "node_count": len(plan)})
+               revision=revision, metadata={"plan_version": plan_version, "node_count": len(plan),
+                                            "requires_approval": bool(requires_approval)})
         conn.commit()
         updated = conn.execute("SELECT * FROM task_runs WHERE id=?", (run_id,)).fetchone()
+    except _MutationConflict as wrapper:
+        conn.rollback()
+        error = wrapper.conflict
+        conn.close()
+        _finish_conflict(error)
     except Exception:
         conn.rollback()
         raise
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
     _log(updated, "task_plan_replaced", "Task plan replaced", status=target,
-         plan_version=plan_version, node_count=len(plan))
+         plan_version=plan_version, node_count=len(plan), requires_approval=bool(requires_approval))
     return get(run_id) or _decode_run(updated)
 
 
-def approve(run_id: str, *, expected_revision: int | None = None) -> dict[str, Any]:
-    return transition(run_id, "ready", event_type="task_plan_approved", next_action="开始执行",
-                      expected_revision=expected_revision)
+_RUN_SETTINGS: dict[str, tuple[str, str, str]] = {
+    "approve": ("task_plan_approved", "", "开始执行"),
+    "start": ("task_run_started", "", "执行可用步骤"),
+    "pause": ("task_run_paused", "已由用户暂停", "继续或重新规划"),
+    "resume": ("task_run_resumed", "", "执行可用步骤"),
+    "cancel": ("task_run_cancelled", "", ""),
+    "replan": ("task_replan_requested", "", "提交新计划"),
+}
 
 
-def start(run_id: str, *, expected_revision: int | None = None) -> dict[str, Any]:
-    result = transition(run_id, "running", event_type="task_run_started", next_action="执行可用步骤",
-                        expected_revision=expected_revision)
-    _refresh_ready_nodes(run_id)
-    return get(run_id) or result
+def approve(run_id: str, *, expected_revision: int) -> dict[str, Any]:
+    return _run_command(run_id, "approve", expected_revision)
 
 
-def pause(run_id: str, *, expected_revision: int | None = None) -> dict[str, Any]:
-    return transition(run_id, "paused", event_type="task_run_paused", waiting_reason="已由用户暂停",
-                      next_action="继续或重新规划", expected_revision=expected_revision)
+def start(run_id: str, *, expected_revision: int) -> dict[str, Any]:
+    return _run_command(run_id, "start", expected_revision)
 
 
-def resume(run_id: str, *, expected_revision: int | None = None) -> dict[str, Any]:
-    result = transition(run_id, "running", event_type="task_run_resumed", next_action="执行可用步骤",
-                        expected_revision=expected_revision)
-    _refresh_ready_nodes(run_id)
-    return get(run_id) or result
+def pause(run_id: str, *, expected_revision: int) -> dict[str, Any]:
+    return _run_command(run_id, "pause", expected_revision)
 
 
-def cancel(run_id: str, *, expected_revision: int | None = None) -> dict[str, Any]:
-    return transition(run_id, "cancelled", event_type="task_run_cancelled", next_action="",
-                      expected_revision=expected_revision)
+def resume(run_id: str, *, expected_revision: int) -> dict[str, Any]:
+    return _run_command(run_id, "resume", expected_revision)
 
 
-def replan(run_id: str, *, expected_revision: int | None = None) -> dict[str, Any]:
-    return transition(run_id, "planning", event_type="task_replan_requested", next_action="提交新计划",
-                      expected_revision=expected_revision)
+def cancel(run_id: str, *, expected_revision: int) -> dict[str, Any]:
+    return _run_command(run_id, "cancel", expected_revision)
 
 
-def transition(run_id: str, target: str, *, event_type: str, waiting_reason: str = "",
-               next_action: str = "", error_code: str | None = None,
-               error_message: str | None = None, expected_revision: int | None = None) -> dict[str, Any]:
+def replan(run_id: str, *, expected_revision: int) -> dict[str, Any]:
+    return _run_command(run_id, "replan", expected_revision)
+
+
+def _run_command(run_id: str, command: contract.RunCommand, expected_revision: int) -> dict[str, Any]:
+    event_type, waiting_reason, next_action = _RUN_SETTINGS[command]
     conn = db.connect()
     try:
         conn.execute("BEGIN IMMEDIATE")
         run = conn.execute("SELECT * FROM task_runs WHERE id=?", (run_id,)).fetchone()
         if run is None:
             raise TaskRunError("task_run_not_found")
-        old = str(run["status"])
-        if old == target and target in {"paused", "cancelled"}:
+        decision = contract.decide_run(contract.RunCommandContext(
+            command=command, status=run["status"], revision=run["revision"],
+            expected_revision=expected_revision, plan_version=run["plan_version"],
+            requires_approval=bool(run["requires_approval"]),
+            approved_plan_version=run["approved_plan_version"],
+        ))
+        if decision.outcome == "idempotent":
             conn.rollback()
             return get(run_id) or _decode_run(run)
-        _check_revision(run, expected_revision)
-        if target not in RUN_TRANSITIONS.get(old, set()):
-            raise TaskRunError("task_run_transition_invalid")
+        _raise_decision(decision, run_id)
+        target = decision.target_status
+        assert target is not None
+        old = str(run["status"])
         now = db.now()
-        if target == "completed":
-            incomplete = conn.execute(
-                "SELECT COUNT(*) FROM task_nodes WHERE task_run_id=? "
-                "AND status NOT IN ('succeeded','skipped')", (run_id,),
-            ).fetchone()[0]
-            if incomplete:
-                raise TaskRunError("task_run_completion_evidence_missing")
         revision = int(run["revision"]) + 1
         started = run["started_at"] or (now if target == "running" else None)
-        finished = now if target in RUN_TERMINAL or target == "failed" else None
+        finished = now if target in RUN_TERMINAL else None
+        approved_version = run["approved_plan_version"]
+        approved_at = run["approved_at"]
+        if command == "approve":
+            approved_version = int(run["plan_version"])
+            approved_at = now
+        if command == "replan":
+            approved_version = None
+            approved_at = None
         conn.execute(
-            "UPDATE task_runs SET status=?,revision=?,waiting_reason=?,next_action=?,error_code=?,"
-            "error_message=?,started_at=?,finished_at=?,updated_at=? WHERE id=?",
-            (target, revision, _text(waiting_reason, 240), _text(next_action, 240), error_code,
-             _text(error_message, 500) or None, started, finished, now, run_id),
+            "UPDATE task_runs SET status=?,revision=?,waiting_reason=?,next_action=?,started_at=?,"
+            "finished_at=?,approved_plan_version=?,approved_at=?,updated_at=? WHERE id=?",
+            (target, revision, waiting_reason, next_action, started, finished,
+             approved_version, approved_at, now, run_id),
         )
         if target == "running":
             conn.execute("UPDATE tasks SET status='doing',updated_at=? WHERE id=?", (now, run["task_id"]))
-        elif target == "completed":
-            conn.execute("UPDATE tasks SET status='done',updated_at=? WHERE id=?", (now, run["task_id"]))
+            _refresh_ready_nodes(run_id, conn)
         if target in {"paused", "planning"}:
             conn.execute(
                 "UPDATE task_nodes SET status='blocked',revision=revision+1,updated_at=? "
@@ -318,83 +399,147 @@ def transition(run_id: str, target: str, *, event_type: str, waiting_reason: str
             )
         elif target == "cancelled":
             conn.execute(
-                "UPDATE task_nodes SET status='cancelled',finished_at=?,updated_at=?,revision=revision+1 "
-                "WHERE task_run_id=? AND status NOT IN ('succeeded','failed','skipped','cancelled')",
+                "UPDATE task_nodes SET status='cancelled',finished_at=?,updated_at=?,revision=revision+1,"
+                "skip_reason_code=NULL,skip_reason_summary=NULL WHERE task_run_id=? "
+                "AND status NOT IN ('succeeded','failed','skipped','cancelled')",
                 (now, now, run_id),
             )
-        _event(conn, run_id, event_type, from_status=old, to_status=target, revision=revision,
-               reason_code=error_code)
+            conn.execute(
+                "UPDATE tasks SET status='todo',updated_at=? WHERE id=? AND status='doing'",
+                (now, run["task_id"]),
+            )
+        metadata = {"plan_version": int(run["plan_version"])} if command == "approve" else None
+        _event(conn, run_id, event_type, from_status=old, to_status=target,
+               revision=revision, metadata=metadata)
         conn.commit()
         updated = conn.execute("SELECT * FROM task_runs WHERE id=?", (run_id,)).fetchone()
+    except _MutationConflict as wrapper:
+        conn.rollback()
+        error = wrapper.conflict
+        conn.close()
+        _finish_conflict(error)
     except Exception:
         conn.rollback()
         raise
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
     _log(updated, event_type, f"Task run {target}",
-         level="ERROR" if target == "failed" else "WARNING" if target in {"cancelled", "recovery_required"} else "INFO",
-         from_status=old, status=target, error_code=error_code)
+         level="WARNING" if target == "cancelled" else "INFO",
+         from_status=old, status=target)
     return get(run_id) or _decode_run(updated)
 
 
-def _refresh_ready_nodes(run_id: str, conn=None) -> None:
-    owns = conn is None
-    conn = conn or db.connect()
-    try:
-        rows = conn.execute("SELECT * FROM task_nodes WHERE task_run_id=? ORDER BY position", (run_id,)).fetchall()
-        succeeded = {row["client_id"] for row in rows if row["status"] in {"succeeded", "skipped"}}
-        now = db.now()
-        for row in rows:
-            if row["status"] not in {"pending", "blocked"}:
-                continue
-            deps = json.loads(row["depends_on_json"] or "[]")
-            status = "ready" if all(dep in succeeded for dep in deps) else "blocked"
-            conn.execute("UPDATE task_nodes SET status=?,updated_at=? WHERE id=?", (status, now, row["id"]))
-        if owns:
-            conn.commit()
-    finally:
-        if owns:
-            conn.close()
+def _refresh_ready_nodes(run_id: str, conn) -> None:
+    rows = conn.execute(
+        "SELECT * FROM task_nodes WHERE task_run_id=? ORDER BY position", (run_id,),
+    ).fetchall()
+    satisfied = {row["client_id"] for row in rows if row["status"] in {"succeeded", "skipped"}}
+    now = db.now()
+    for row in rows:
+        if row["status"] not in {"pending", "blocked"}:
+            continue
+        dependencies = json.loads(row["depends_on_json"] or "[]")
+        status = "ready" if all(dependency in satisfied for dependency in dependencies) else "blocked"
+        conn.execute("UPDATE task_nodes SET status=?,updated_at=? WHERE id=?", (status, now, row["id"]))
 
 
-def transition_node(run_id: str, node_id: str, action: str, *, output_summary: str = "",
-                    error_code: str | None = None, error_message: str | None = None,
-                    expected_revision: int | None = None) -> dict[str, Any]:
-    targets = {"start": "running", "succeed": "succeeded", "fail": "failed", "skip": "skipped"}
-    if action not in targets:
+def _normalize_node_evidence(action: str, *, output_summary: str, error_code: str | None,
+                             error_message: str | None, reason_code: str | None,
+                             reason_summary: str) -> dict[str, Any]:
+    evidence: dict[str, Any] = {
+        "output_summary": "",
+        "error_code": None,
+        "error_message": None,
+        "skip_reason_code": None,
+        "skip_reason_summary": None,
+    }
+    if action == "succeed":
+        evidence["output_summary"] = _text(output_summary, 500)
+    elif action == "fail":
+        evidence["error_code"] = _text(error_code, 120) or None
+        evidence["error_message"] = _text(error_message, 500) or None
+    elif action == "skip":
+        evidence["skip_reason_code"] = _text(reason_code, 120) or None
+        evidence["skip_reason_summary"] = _text(reason_summary, 240) or None
+        if not evidence["skip_reason_code"]:
+            raise TaskRunConflict("task_node_evidence_conflict")
+    return evidence
+
+
+def _node_evidence_matches(node: Any, target: str, evidence: dict[str, Any]) -> bool:
+    if node["status"] != target:
+        return False
+    if target == "succeeded":
+        return node["output_summary"] == evidence["output_summary"]
+    if target == "failed":
+        return (node["error_code"] == evidence["error_code"]
+                and node["error_message"] == evidence["error_message"])
+    if target == "skipped":
+        return (node["skip_reason_code"] == evidence["skip_reason_code"]
+                and node["skip_reason_summary"] == evidence["skip_reason_summary"])
+    return target == "running"
+
+
+def transition_node(run_id: str, node_id: str, action: str, *, expected_revision: int,
+                    output_summary: str = "", error_code: str | None = None,
+                    error_message: str | None = None, reason_code: str | None = None,
+                    reason_summary: str = "") -> dict[str, Any]:
+    if action not in {"start", "succeed", "fail", "skip"}:
         raise TaskRunError("task_node_action_invalid")
+    target = {"start": "running", "succeed": "succeeded", "fail": "failed", "skip": "skipped"}[action]
     conn = db.connect()
     try:
         conn.execute("BEGIN IMMEDIATE")
         run = conn.execute("SELECT * FROM task_runs WHERE id=?", (run_id,)).fetchone()
-        node = conn.execute("SELECT * FROM task_nodes WHERE id=? AND task_run_id=?", (node_id, run_id)).fetchone()
-        if run is None or node is None:
+        if run is None:
+            raise TaskRunError("task_run_not_found")
+        node = conn.execute(
+            "SELECT * FROM task_nodes WHERE id=? AND task_run_id=?", (node_id, run_id),
+        ).fetchone()
+        if node is None:
             raise TaskRunError("task_node_not_found")
-        _check_revision(run, expected_revision)
-        if run["status"] != "running":
-            raise TaskRunError("task_run_not_running")
+        try:
+            evidence = _normalize_node_evidence(
+                action, output_summary=output_summary, error_code=error_code,
+                error_message=error_message, reason_code=reason_code, reason_summary=reason_summary,
+            )
+        except TaskRunConflict as error:
+            error.run_id = run_id
+            raise _MutationConflict(error) from error
+        decision = contract.decide_node(contract.NodeCommandContext(
+            command=action, run_status=run["status"], node_status=node["status"],
+            revision=run["revision"], expected_revision=expected_revision,
+            evidence_matches=_node_evidence_matches(node, target, evidence),
+        ))
+        if decision.outcome == "idempotent":
+            conn.rollback()
+            return get(run_id) or _decode_run(run)
+        _raise_decision(decision, run_id)
         old = node["status"]
-        target = targets[action]
-        allowed = ((action == "start" and old == "ready") or
-                   (action in {"succeed", "fail"} and old == "running") or
-                   (action == "skip" and old in {"ready", "blocked", "pending"}))
-        if not allowed:
-            raise TaskRunError("task_node_transition_invalid")
         now = db.now()
         finished = now if target in NODE_TERMINAL else None
         started = node["started_at"] or (now if target == "running" else None)
         node_revision = int(node["revision"]) + 1
         conn.execute(
-            "UPDATE task_nodes SET status=?,output_summary=?,error_code=?,error_message=?,revision=?,"
-            "started_at=?,finished_at=?,updated_at=? WHERE id=?",
-            (target, _text(output_summary, 500), error_code, _text(error_message, 500) or None,
+            "UPDATE task_nodes SET status=?,output_summary=?,error_code=?,error_message=?,"
+            "skip_reason_code=?,skip_reason_summary=?,revision=?,started_at=?,finished_at=?,updated_at=? "
+            "WHERE id=?",
+            (target, evidence["output_summary"], evidence["error_code"], evidence["error_message"],
+             evidence["skip_reason_code"] if target == "skipped" else None,
+             evidence["skip_reason_summary"] if target == "skipped" else None,
              node_revision, started, finished, now, node_id),
         )
         run_revision = int(run["revision"]) + 1
+        reason = evidence["skip_reason_code"] if target == "skipped" else evidence["error_code"]
         _event(conn, run_id, f"task_node_{target}", node_id=node_id, from_status=old,
-               to_status=target, revision=run_revision, reason_code=error_code)
-        conn.execute("UPDATE task_runs SET revision=?,current_node_id=?,updated_at=? WHERE id=?",
-                     (run_revision, None if target in NODE_TERMINAL else node_id, now, run_id))
+               to_status=target, revision=run_revision, reason_code=reason)
+        conn.execute(
+            "UPDATE task_runs SET revision=?,current_node_id=?,updated_at=? WHERE id=?",
+            (run_revision, None if target in NODE_TERMINAL else node_id, now, run_id),
+        )
         if target in {"succeeded", "skipped"}:
             _refresh_ready_nodes(run_id, conn)
         counts = conn.execute(
@@ -403,20 +548,26 @@ def transition_node(run_id: str, node_id: str, action: str, *, output_summary: s
         ).fetchone()
         done = int(counts["done"] or 0)
         total = int(counts["total"])
-        conn.execute("UPDATE task_runs SET progress_current=?,progress_total=? WHERE id=?",
-                     (done, total, run_id))
+        conn.execute(
+            "UPDATE task_runs SET progress_current=?,progress_total=? WHERE id=?", (done, total, run_id),
+        )
         final_status: str | None = None
         if target == "failed":
             final_status = "failed"
             final_revision = run_revision + 1
             conn.execute(
                 "UPDATE task_runs SET status='failed',revision=?,current_node_id=NULL,error_code=?,"
-                "error_message=?,waiting_reason='',next_action='重新规划或取消',finished_at=?,updated_at=? WHERE id=?",
-                (final_revision, error_code or "task_node_failed",
-                 _text(error_message, 500) or "任务步骤失败", now, now, run_id),
+                "error_message=?,waiting_reason='',next_action='重新规划或取消',finished_at=?,updated_at=? "
+                "WHERE id=?",
+                (final_revision, evidence["error_code"] or "task_node_failed",
+                 evidence["error_message"] or "任务步骤失败", now, now, run_id),
             )
             _event(conn, run_id, "task_run_failed", from_status="running", to_status="failed",
-                   revision=final_revision, reason_code=error_code or "task_node_failed")
+                   revision=final_revision, reason_code=evidence["error_code"] or "task_node_failed")
+            conn.execute(
+                "UPDATE tasks SET status='todo',updated_at=? WHERE id=? AND status='doing'",
+                (now, run["task_id"]),
+            )
         elif total and done == total:
             final_status = "completed"
             final_revision = run_revision + 1
@@ -428,45 +579,84 @@ def transition_node(run_id: str, node_id: str, action: str, *, output_summary: s
             _event(conn, run_id, "task_run_completed", from_status="running", to_status="completed",
                    revision=final_revision)
         conn.commit()
+    except _MutationConflict as wrapper:
+        conn.rollback()
+        error = wrapper.conflict
+        conn.close()
+        _finish_conflict(error)
     except Exception:
         conn.rollback()
         raise
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
     current = get(run_id)
     assert current is not None
     _log(current, f"task_node_{target}", f"Task node {target}",
          level="ERROR" if final_status == "failed" else "INFO", node_id=node_id,
-         node_status=target, progress_current=current["progress_current"], progress_total=current["progress_total"])
+         node_status=target, progress_current=current["progress_current"],
+         progress_total=current["progress_total"])
     return current
 
 
-def link_artifact(run_id: str, artifact_id: str, *, node_id: str | None = None, label: str = "",
-                  expected_revision: int | None = None) -> dict[str, Any]:
+def link_artifact(run_id: str, artifact_id: str, *, expected_revision: int,
+                  node_id: str | None = None, label: str = "") -> dict[str, Any]:
+    requested = contract.ArtifactLink(_text(artifact_id, 120), node_id, _text(label, 120))
+    if not requested.artifact_id:
+        raise TaskRunError("task_artifact_id_invalid")
     conn = db.connect()
     try:
         conn.execute("BEGIN IMMEDIATE")
         run = conn.execute("SELECT * FROM task_runs WHERE id=?", (run_id,)).fetchone()
         if run is None:
             raise TaskRunError("task_run_not_found")
-        _check_revision(run, expected_revision)
-        if node_id and conn.execute("SELECT 1 FROM task_nodes WHERE id=? AND task_run_id=?", (node_id, run_id)).fetchone() is None:
+        if node_id and conn.execute(
+            "SELECT 1 FROM task_nodes WHERE id=? AND task_run_id=?", (node_id, run_id),
+        ).fetchone() is None:
             raise TaskRunError("task_node_not_found")
-        link_id = f"tal_{db.new_id()}"
+        row = conn.execute(
+            "SELECT * FROM task_run_artifact_links WHERE task_run_id=? AND artifact_id=?",
+            (run_id, requested.artifact_id),
+        ).fetchone()
+        existing = None if row is None else contract.ArtifactLink(
+            row["artifact_id"], row["node_id"], row["label"],
+        )
+        decision = contract.decide_artifact(contract.ArtifactCommandContext(
+            run_status=run["status"], revision=run["revision"],
+            expected_revision=expected_revision, requested=requested, existing=existing,
+        ))
+        if decision.outcome == "idempotent":
+            conn.rollback()
+            return get(run_id) or _decode_run(run)
+        _raise_decision(decision, run_id)
         conn.execute(
-            "INSERT INTO task_run_artifact_links(id,task_run_id,node_id,artifact_id,label,created_at) VALUES(?,?,?,?,?,?)",
-            (link_id, run_id, node_id, _text(artifact_id, 120), _text(label, 120), db.now()),
+            "INSERT INTO task_run_artifact_links(id,task_run_id,node_id,artifact_id,label,created_at) "
+            "VALUES(?,?,?,?,?,?)",
+            (f"tal_{db.new_id()}", run_id, node_id, requested.artifact_id,
+             requested.label, db.now()),
         )
         revision = int(run["revision"]) + 1
-        conn.execute("UPDATE task_runs SET revision=?,updated_at=? WHERE id=?", (revision, db.now(), run_id))
+        conn.execute(
+            "UPDATE task_runs SET revision=?,updated_at=? WHERE id=?", (revision, db.now(), run_id),
+        )
         _event(conn, run_id, "task_artifact_linked", node_id=node_id, revision=revision,
-               metadata={"artifact_id": _text(artifact_id, 120)})
+               metadata={"artifact_id": requested.artifact_id})
         conn.commit()
+    except _MutationConflict as wrapper:
+        conn.rollback()
+        error = wrapper.conflict
+        conn.close()
+        _finish_conflict(error)
     except Exception:
         conn.rollback()
         raise
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
     return get(run_id) or {}
 
 
@@ -485,8 +675,14 @@ def recover_stale_runs() -> int:
                 "current_node_id=NULL,updated_at=? WHERE id=?",
                 (revision, "应用重启中断了执行", "检查状态后继续、重新规划或取消", now, run["id"]),
             )
-            conn.execute("UPDATE task_nodes SET status='blocked',revision=revision+1,updated_at=? "
-                         "WHERE task_run_id=? AND status='running'", (now, run["id"]))
+            conn.execute(
+                "UPDATE task_nodes SET status='blocked',revision=revision+1,updated_at=? "
+                "WHERE task_run_id=? AND status='running'", (now, run["id"]),
+            )
+            conn.execute(
+                "UPDATE tasks SET status='todo',updated_at=? WHERE id=? AND status='doing'",
+                (now, run["task_id"]),
+            )
             _event(conn, run["id"], "task_run_recovery_required", from_status="running",
                    to_status="recovery_required", revision=revision, reason_code="process_restarted")
             changed.append(dict(run))

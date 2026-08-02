@@ -886,6 +886,8 @@ export interface TaskNode {
   output_summary: string;
   error_code?: string | null;
   error_message?: string | null;
+  skip_reason_code?: string | null;
+  skip_reason_summary?: string | null;
 }
 export interface TaskRun {
   id: string;
@@ -894,6 +896,9 @@ export interface TaskRun {
   status: TaskRunStatus;
   revision: number;
   plan_version: number;
+  requires_approval: number;
+  approved_plan_version?: number | null;
+  approved_at?: number | null;
   goal_summary: string;
   progress_current: number;
   progress_total: number;
@@ -908,6 +913,28 @@ export interface TaskRun {
   created_at: number;
   updated_at: number;
 }
+export type TaskRunRetry =
+  | "refresh_then_user_retry" | "modify_then_retry" | "not_retryable";
+export interface TaskRunConflictDetail {
+  code: string;
+  message: string;
+  retry: TaskRunRetry;
+  current: TaskRun | null;
+}
+
+export function taskRunConflictSnapshot(error: unknown, local: TaskRun): TaskRun | null {
+  if (!(error instanceof ApiError) || error.status !== 409) return null;
+  const current = error.details?.current as TaskRun | undefined;
+  if (!current || current.id !== local.id || !Number.isInteger(current.revision)) return null;
+  return current.revision >= local.revision ? current : null;
+}
+
+export const taskRunRetryMessage = (retry: TaskRunRetry | undefined) => ({
+  refresh_then_user_retry: "请查看最新状态后再重试。",
+  modify_then_retry: "请调整本次操作后再重试。",
+  not_retryable: "当前状态不能重试这项操作。",
+}[retry || "refresh_then_user_retry"]);
+
 export interface Provider {
   id: string;
   name: string;
@@ -1428,8 +1455,8 @@ export const getTaskRun = (runId: string) => j<TaskRun>(`/api/task-runs/${runId}
 export const replaceTaskRunPlan = (
   runId: string,
   nodes: Array<{ client_id: string; title: string; depends_on?: string[]; completion_criteria?: string }>,
+  expectedRevision: number,
   requiresApproval = false,
-  expectedRevision?: number,
 ) => j<TaskRun>(`/api/task-runs/${runId}/plan`, {
   method: "PUT", body: JSON.stringify({
     nodes, requires_approval: requiresApproval, expected_revision: expectedRevision,
@@ -1438,7 +1465,7 @@ export const replaceTaskRunPlan = (
 export const taskRunAction = (
   runId: string,
   action: "approve" | "start" | "pause" | "resume" | "cancel" | "replan",
-  expectedRevision?: number,
+  expectedRevision: number,
 ) => j<TaskRun>(`/api/task-runs/${runId}/${action}`, {
   method: "POST", body: JSON.stringify({ expected_revision: expectedRevision }),
 });
@@ -1446,9 +1473,26 @@ export const taskNodeAction = (
   runId: string,
   nodeId: string,
   action: "start" | "succeed" | "fail" | "skip",
-  detail: { output_summary?: string; error_code?: string; error_message?: string; expected_revision?: number } = {},
+  expectedRevision: number,
+  evidence: {
+    output_summary?: string;
+    error_code?: string;
+    error_message?: string;
+    reason_code?: string;
+    reason_summary?: string;
+  } = {},
 ) => j<TaskRun>(`/api/task-runs/${runId}/nodes/${nodeId}/action`, {
-  method: "POST", body: JSON.stringify({ action, ...detail }),
+  method: "POST", body: JSON.stringify({ action, expected_revision: expectedRevision, ...evidence }),
+});
+export const linkTaskRunArtifact = (
+  runId: string,
+  artifactId: string,
+  expectedRevision: number,
+  detail: { node_id?: string; label?: string } = {},
+) => j<TaskRun>(`/api/task-runs/${runId}/artifacts`, {
+  method: "POST", body: JSON.stringify({
+    artifact_id: artifactId, expected_revision: expectedRevision, ...detail,
+  }),
 });
 
 // ---- 模型 / 供应商 ----

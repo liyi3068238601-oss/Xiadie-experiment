@@ -46,7 +46,7 @@ export function TasksPage() {
       await api.replaceTaskRunPlan(run.id, [{
         client_id: "deliver", title: task.title, depends_on: [],
         completion_criteria: "形成可核验的结果或明确失败原因",
-      }], false, run.revision);
+      }], run.revision, false);
       toast("已建立执行计划，可在开始前继续由 Agent 调整");
       refresh();
     } catch (reason: any) {
@@ -54,14 +54,30 @@ export function TasksPage() {
     }
   };
 
+  const replaceRun = (taskId: string, run: api.TaskRun) => {
+    setRuns((current) => ({ ...current, [taskId]: run }));
+  };
+
+  const reconcileConflict = async (taskId: string, local: api.TaskRun, reason: unknown) => {
+    const current = api.taskRunConflictSnapshot(reason, local);
+    const next = current || await api.getTaskRun(local.id);
+    replaceRun(taskId, next);
+    if (reason instanceof api.ApiError) {
+      const detail = reason.details as Partial<api.TaskRunConflictDetail> | undefined;
+      toast(`${detail?.message || reason.message} ${api.taskRunRetryMessage(detail?.retry)}`);
+    }
+  };
+
   const runAction = async (run: api.TaskRun, action: "approve" | "start" | "pause" | "resume" | "cancel" | "replan") => {
     try {
-      await api.taskRunAction(run.id, action, run.revision);
-      refresh();
+      replaceRun(run.task_id, await api.taskRunAction(run.id, action, run.revision));
     } catch (reason: any) {
-      if (reason?.code === "task_run_revision_conflict") {
-        toast("任务已在别处更新，已刷新到最新状态");
-        refresh();
+      if (reason instanceof api.ApiError && reason.status === 409) {
+        try {
+          await reconcileConflict(run.task_id, run, reason);
+        } catch (refreshError: any) {
+          toast(refreshError?.message || "任务已更新，但无法读取最新状态");
+        }
         return;
       }
       toast(reason?.message || "执行状态更新失败");
@@ -70,15 +86,19 @@ export function TasksPage() {
 
   const nodeAction = async (run: api.TaskRun, node: api.TaskNode, action: "start" | "succeed" | "fail" | "skip") => {
     try {
-      await api.taskNodeAction(run.id, node.id, action,
-        action === "fail"
-          ? { error_code: "manual_step_failed", error_message: "用户标记步骤失败", expected_revision: run.revision }
-          : { expected_revision: run.revision });
-      refresh();
+      const evidence = action === "fail"
+        ? { error_code: "manual_step_failed", error_message: "用户标记步骤失败" }
+        : action === "skip" ? { reason_code: "manual_skip" } : {};
+      replaceRun(run.task_id, await api.taskNodeAction(
+        run.id, node.id, action, run.revision, evidence,
+      ));
     } catch (reason: any) {
-      if (reason?.code === "task_run_revision_conflict") {
-        toast("步骤状态已经变化，已刷新任务");
-        refresh();
+      if (reason instanceof api.ApiError && reason.status === 409) {
+        try {
+          await reconcileConflict(run.task_id, run, reason);
+        } catch (refreshError: any) {
+          toast(refreshError?.message || "步骤已更新，但无法读取最新状态");
+        }
         return;
       }
       toast(reason?.message || "步骤状态更新失败");
@@ -188,7 +208,7 @@ export function TasksPage() {
                   </div>
                   <div className="task-actions">
                     {!run && !done && <button onClick={() => void createExecution(task)}>建立执行</button>}
-                    {run?.status === "awaiting_approval" && <button onClick={() => void runAction(run, "approve")}>批准</button>}
+                    {run?.status === "awaiting_approval" && <button onClick={() => void runAction(run, "approve")}>批准计划</button>}
                     {run?.status === "ready" && <button onClick={() => void runAction(run, "start")}>开始</button>}
                     {run?.status === "running" && <button onClick={() => void runAction(run, "pause")}>暂停</button>}
                     {(run?.status === "paused" || run?.status === "recovery_required") && <button onClick={() => void runAction(run, "resume")}>继续</button>}
@@ -203,6 +223,7 @@ export function TasksPage() {
                     <i><b style={{ width: `${run.progress_total ? (run.progress_current / run.progress_total) * 100 : 0}%` }} /></i>
                     <code>{run.id}</code>
                   </div>
+                  {run.status === "awaiting_approval" && <p>这里只批准计划，不会授予文件、网络或工具权限。</p>}
                   {(run.waiting_reason || run.error_message) && <p className={run.error_message ? "error" : ""}>
                     {run.error_message || run.waiting_reason}
                   </p>}
