@@ -1,6 +1,6 @@
 # CYR.2 TaskRun 执行工作台施工计划
 
-> 状态：CYR.2A 已完成；CYR.2B 开源参考与可选 revision 并发合同已实现；合同闭合批次设计已批准、尚未实施
+> 状态：CYR.2A 与 CYR.2B 合同闭合批次已完成工程验证；多节点编辑、TaskRun SSE 与执行历史仍在 CYR.2B 后续
 > 最后更新：2026-08-02
 > 当前批次设计：[CYR.2B 合同闭合批次设计](superpowers/specs/2026-08-02-cyr2b-contract-closure-design.md)
 > 适用范围：Task、TaskRun、TaskNode、恢复、任务台与执行审计
@@ -103,7 +103,7 @@ Schema 85 已有的 `tool_runs.task_run_id` 在 CYR.2 获得真实父对象，Ta
 | `POST .../nodes/{node_id}/action` | 受状态机约束地推进节点；未来主要由执行器调用 |
 | `POST .../artifacts` | 关联未来 Artifact ID，不创建文件 |
 
-API 使用稳定的机器错误码，例如 `task_plan_cycle`、`task_run_transition_invalid`、`task_node_transition_invalid`。不存在返回 404；无效计划和非法转换返回 409。所有变更接口可携带 `expected_revision`；版本陈旧时返回 409、`task_run_revision_conflict` 和当前 TaskRun 快照，客户端刷新后由用户重试，不静默覆盖新状态。
+API 使用稳定的机器错误码，例如 `task_plan_cycle`、`task_run_transition_invalid`、`task_node_transition_invalid`。不存在返回 404；缺少 revision 或格式错误返回 422；计划、状态和证据冲突返回统一 409：`detail: {code,message,retry,current}`。所有修改接口必须携带 `expected_revision`，API 请求模型和领域公共入口都不能省略；客户端只接收同 Run 且不旧于本地的 `current`，否则重新 GET，并且不自动重放 mutation。
 
 ## 5. 恢复、取消与并发
 
@@ -129,7 +129,7 @@ CYR.2A 只实现“停止并等待显式恢复”；细粒度 checkpoint 和副�
 
 ### 5.3 并发计划
 
-CYR.2A 已使用 SQLite `BEGIN IMMEDIATE` 保证单次状态变化原子；CYR.2B 首批已经让客户端可以提交 `expected_revision`，陈旧版本返回 409 和当前快照，但字段仍可省略，因此尚未形成不可绕过的 compare-and-swap。已批准的合同闭合批次将同时在 API 与 TaskRun 领域层强制 revision，补齐完整 Run/Node 状态矩阵、精确语义幂等、统一结构化 409 和零写入固定集。
+CYR.2B 合同闭合已经以 SQLite `BEGIN IMMEDIATE` 和必填 `expected_revision` 形成不可绕过的 compare-and-swap。纯合同内核穷举 Run/Node 命令矩阵，并固定“精确重放 → revision 冲突 → 状态/参数冲突 → 应用”的顺序；精确重放和所有拒绝路径均零写入。`start`/`resume`、Task 投影、节点刷新和事件同事务提交，消除了可见半状态。
 
 ## 6. 诊断与隐私
 
@@ -197,8 +197,9 @@ CYR.2B 参考以下开源项目的协议和交互思想，但不直接复制代�
 
 - [x] `expected_revision` 可选乐观并发、409 当前快照与前端刷新恢复。
 - [x] 已实现冲突无写入和暂停/取消幂等首批固定集。
-- [ ] 按已批准设计强制 API/领域层 CAS，补齐完整 Run/Node 非法转换矩阵、精确语义幂等与统一 409。
-- [ ] 冻结 `awaiting_approval` 只批准计划的边界，并以 Schema 87 保存批准资格与节点跳过证据。
+- [x] API/领域层强制 CAS，纯合同内核覆盖完整 Run/Node 非法转换矩阵、精确语义幂等与统一 409。
+- [x] Schema 87 保存当前计划批准资格与节点跳过证据；批准只绑定当前 `plan_version`，不等于文件、网络或工具权限。
+- [x] `start`/`resume`、节点刷新、Task 投影和事件原子提交；精确重放与冲突固定集验证五类业务表零写入。
 - [ ] 结构化多节点计划编辑器、依赖可视化和验收条件编辑。
 - [ ] TaskRun 业务事件 SSE 状态更新。
 - [ ] 列出历史执行、失败原因与再次执行入口。
@@ -235,4 +236,6 @@ CYR.2 全阶段退出门：
 
 ## 11. 后续衔接
 
-CYR.2B 当前先执行合同闭合批次；其后依次推进多节点计划编辑、TaskRun SSE、执行历史与再次执行，再进入 CYR.2C Planner 与恢复策略。CYR.2 全阶段完成后才进入 CYR.3：建立 ToolRegistry、PermissionGuard、ConfirmationRequest 和正式 Artifact。ToolRun 已有权威状态机，CYR.3 的工具适配器必须复用它，并把 `task_run_id` 与当前节点绑定；任何插件或工具不得直接把节点写成成功。
+CYR.2B 合同闭合批次已在 `agent/cyr2b-contract-closure` 完成实现与本地门禁：后端全量 `2752 passed`，TaskRun 合同/Schema/领域/HTTP 定向 `234 passed`，前端 `85 passed`，Electron 生命周期 `4 passed`，Python `compileall`、Vite 生产构建与 `git diff --check` 通过。现存提示只有 Starlette/httpx 弃用、pytest cache 权限和 Live2D Classic Vite 提示。
+
+下一步依次推进多节点计划编辑、TaskRun SSE、执行历史与再次执行，再进入 CYR.2C Planner 与恢复策略。CYR.2 全阶段完成后才进入 CYR.3：建立 ToolRegistry、PermissionGuard、ConfirmationRequest 和正式 Artifact。ToolRun 已有权威状态机，CYR.3 的工具适配器必须复用它，并把 `task_run_id` 与当前节点绑定；任何插件或工具不得直接把节点写成成功。
