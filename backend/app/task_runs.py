@@ -885,3 +885,46 @@ def recover_stale_runs() -> int:
              level="WARNING", from_status="running", status="recovery_required",
              reason_code="process_restarted")
     return len(changed)
+
+
+def recovery_view(run_id: str) -> dict | None:
+    """Aggregate authoritative recovery advice from run, nodes and ToolRun evidence."""
+    from . import recovery_policy
+    run = get(run_id)
+    if run is None:
+        return None
+    tool_runs = run.get("tool_runs") or []
+    last = tool_runs[-1] if tool_runs else None
+    has_terminal = bool(last and last.get("status") in {"succeeded", "failed", "completed"})
+    node = next((n for n in (run.get("nodes") or [])
+                 if n.get("status") not in NODE_TERMINAL), None)
+    recovery_class = node.get("recovery_class") if node else None
+    advice = recovery_policy.decide_recovery(
+        recovery_class, has_terminal_evidence=has_terminal,
+        retries_used=_count_retries(run, last),
+    )
+    return {
+        "run_id": run_id,
+        "status": run["status"],
+        "recovery_class": recovery_class,
+        "last_evidence": {
+            "tool_name": last.get("tool_name") if last else None,
+            "phase": last.get("phase") if last else None,
+            "status": last.get("status") if last else None,
+            "trace_id": last.get("trace_id") if last else None,
+            "error_message": last.get("error_message") if last else None,
+        } if last else None,
+        "retries_used": _count_retries(run, last),
+        **advice,
+    }
+
+
+def _count_retries(run: dict, last: dict | None) -> int:
+    """Bounded heuristic: tool interruption events observed for this run."""
+    if not last:
+        return 0
+    count = 0
+    for event in run.get("events") or []:
+        if event.get("event_type") == "task_node_running" and event.get("reason_code") == "retry":
+            count += 1
+    return min(count, 9)

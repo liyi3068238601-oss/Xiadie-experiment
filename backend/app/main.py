@@ -3681,6 +3681,14 @@ async def generate_run_plan_proposal(run_id: str) -> dict:
     return proposal
 
 
+@app.get("/api/task-runs/{run_id}/recovery")
+def get_task_run_recovery(run_id: str) -> dict:
+    result = task_runs.recovery_view(run_id)
+    if result is None:
+        raise HTTPException(404, "task_run_not_found")
+    return result
+
+
 # ---------------------------------------------------------------- 供应商 / 模型
 @app.get("/api/providers")
 def get_providers() -> list[dict]:

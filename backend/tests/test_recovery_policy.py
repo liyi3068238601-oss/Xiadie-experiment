@@ -1,6 +1,40 @@
 from __future__ import annotations
 
+import pytest
+
+from app import db
 from app import recovery_policy as rp
+
+
+@pytest.fixture(autouse=True)
+def isolated_db(tmp_path, monkeypatch):
+    monkeypatch.setattr(db, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "test.db"))
+    db.init_db()
+
+
+def _task(title: str = "恢复测试任务") -> str:
+    conn = db.connect()
+    try:
+        task_id = db.new_id()
+        now = db.now()
+        conn.execute(
+            "INSERT INTO tasks(id,title,status,source,created_at,updated_at) VALUES(?,?,'todo','manual',?,?)",
+            (task_id, title, now, now),
+        )
+        conn.commit()
+        return task_id
+    finally:
+        conn.close()
+
+
+def test_recovery_view_aggregates_tool_evidence() -> None:
+    from app import task_runs
+    run = task_runs.create(task_id=_task(), idempotency_key="rec-1")
+    view = task_runs.recovery_view(run["id"])
+    assert view is not None
+    assert view["risk"] == "none"  # 无工具证据 -> fail closed
+    assert view["allowed"] == {"continue": False, "retry": False, "replan": True}
 
 
 def test_side_effect_free_matrix() -> None:
