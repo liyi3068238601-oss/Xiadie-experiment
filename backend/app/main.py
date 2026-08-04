@@ -33,7 +33,7 @@ from . import (
     knowledge_embeddings, knowledge_grants,
     knowledge_management, knowledge_parser, knowledge_policy, knowledge_recall, knowledge_recall_service, knowledge_search,
     knowledge_worker, kig_evidence, kig_governance, kig_maintenance, kig_pipeline, kig_sources, llm, lore, memory, memory_conflicts, memory_shadow_proposals,
-    chat_tool_ingress, persona, persona_output_guard, persona_v2, runtime_logs, short_memo,
+    chat_tool_ingress, confirmation, persona, persona_output_guard, persona_v2, runtime_logs, short_memo,
     task_planner,
     task_runs, tool_executor, worldbook_r1,
     saga_consolidator, saga_lifecycle, saga_summary,
@@ -3409,6 +3409,20 @@ class PlanProposalIn(BaseModel):
     nodes: list[TaskPlanNodeIn] = Field(min_length=1, max_length=50)
 
 
+class ToolPermissionRequestIn(BaseModel):
+    tool_id: str = Field(min_length=1, max_length=120)
+    target: str = Field(min_length=1, max_length=400)
+    purpose: str = Field(default="", max_length=240)
+    grant_duration_seconds: Optional[int] = Field(default=None, ge=60, le=86400)
+    session_id: Optional[str] = Field(default=None, max_length=80)
+    task_run_id: Optional[str] = None
+    node_id: Optional[str] = None
+
+
+class ToolPermissionDecisionIn(BaseModel):
+    grant_duration_seconds: Optional[int] = Field(default=None, ge=60, le=86400)
+
+
 class TaskPlanIn(BaseModel):
     nodes: list[TaskPlanNodeIn] = Field(min_length=1, max_length=50)
     requires_approval: bool = False
@@ -3732,6 +3746,38 @@ def get_task_run_recovery(run_id: str) -> dict:
     if result is None:
         raise HTTPException(404, "task_run_not_found")
     return result
+
+
+@app.post("/api/tool-permissions/requests")
+def create_tool_permission_request(body: ToolPermissionRequestIn) -> dict:
+    return confirmation.create_request(
+        session_id=body.session_id, tool_id=body.tool_id, target=body.target,
+        purpose=body.purpose, grant_duration_seconds=body.grant_duration_seconds,
+        task_run_id=body.task_run_id, node_id=body.node_id,
+    )
+
+
+@app.get("/api/tool-permissions/requests")
+def list_tool_permission_requests(session_id: Optional[str] = None) -> list[dict]:
+    return confirmation.pending(session_id)
+
+
+@app.post("/api/tool-permissions/requests/{request_id}/confirm")
+def confirm_tool_permission(request_id: str, body: ToolPermissionDecisionIn) -> dict:
+    try:
+        return confirmation.confirm(
+            request_id, grant_duration_seconds=body.grant_duration_seconds,
+        )
+    except KeyError:
+        raise HTTPException(404, "confirmation_request_not_found")
+
+
+@app.post("/api/tool-permissions/requests/{request_id}/deny")
+def deny_tool_permission(request_id: str) -> dict:
+    try:
+        return confirmation.deny(request_id)
+    except KeyError:
+        raise HTTPException(404, "confirmation_request_not_found")
 
 
 # ---------------------------------------------------------------- 供应商 / 模型
