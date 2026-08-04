@@ -173,7 +173,7 @@ LOG.1～LOG.5 已可供实验版日常诊断使用。Windows 打包态只读目�
 - [x] CYR.2A：主窗口显示状态、进度、等待原因、错误、下一动作和最小操作入口。
 - [x] CYR.2B：多节点计划编辑、用户修改、乐观并发（强制 CAS）、HTTP 固定集与实时更新（body-free SSE）。
 - [x] CYR.2C：单 Agent Planner、来源引用、恢复策略与用户锁定节点。
-- [ ] CYR.2D：取消竞态、崩溃、打包态与全链路工作台验收。
+- [x] CYR.2D：取消竞态、崩溃、数据库忙与全链路工作台验收（打包/安装链路由 CYR.9 承接）。
 
 权威施工计划见 `docs/CYR2_TASKRUN_EXECUTION_WORKBENCH_PLAN.md`。
 
@@ -480,3 +480,7 @@ CYR.2B (contract closure + UX workbench) has been merged into `main`. The workbe
 ## CYR.2C closure record (2026-08-04)
 
 CYR.2C (Agent Planner + locking + source references + recovery protocol/panel) has been merged into `main`. Chat planning-intent replies emit a bounded `plan_proposal` event and land as TaskRun drafts via `from-proposal`; the workbench re-generates plans with locked-node preservation, shows source reference chips with fail-closed invalidation, and renders a recovery panel driven by the three-class recovery matrix. Next boundary is CYR.2D (cancellation races, crash/packaged recovery, full-chain workbench acceptance); CYR.3 remains responsible for ToolRegistry, grants, and confirmations.
+
+## CYR.2D closure record (2026-08-04)
+
+CYR.2D (workbench acceptance and fault hardening) has been merged into `main`. Fault-injection fixed sets cover concurrent command races, mid-transaction crash rollback, database-busy, and stale-revision competition; a process-level E2E kills the backend mid-run and verifies `recovery_required` plus idempotent cancel on restart. Full-chain trace correlation is covered by `test_task_run_chain.py`. The planner quality fixed set ran against deepseek-v4-pro/flash/chat and currently records all as unverified (structural validity of JSON output is the binding gap). Packaged/installer acceptance is deferred to CYR.9; CYR.3 remains responsible for ToolRegistry, grants, and confirmations.
