@@ -62,7 +62,7 @@ def _business_snapshot() -> dict[str, list[tuple]]:
 def test_schema_87_contains_taskrun_tables():
     conn = db.connect()
     try:
-        assert db.get_schema_version() == 87
+        assert db.get_schema_version() == 88
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert {"task_runs", "task_nodes", "task_run_events", "task_run_artifact_links"} <= tables
     finally:
