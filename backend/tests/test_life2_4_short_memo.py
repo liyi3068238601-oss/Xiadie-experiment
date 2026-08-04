@@ -49,7 +49,7 @@ def test_schema_84_preserves_short_memo_and_defaults_to_shadow():
         version = conn.execute(
             "SELECT value FROM schema_meta WHERE key='schema_version'"
         ).fetchone()[0]
-        assert version == "86"
+        assert version == "87"
         memo_columns = {row["name"] for row in conn.execute("PRAGMA table_info(short_memos)")}
         event_columns = {row["name"] for row in conn.execute("PRAGMA table_info(short_memo_events)")}
         assert {"source_snapshot_hash", "dedupe_key", "expires_at"} <= memo_columns

@@ -4,7 +4,7 @@ Xiadie Experiment 保留“遐蝶”的稳定身份、人格和自然表达，�
 
 本仓库不再发展角色离线生活模拟。原 LIFE 生活连续性系统已完成物理退役：运行时代码、UI、API、worker、adapter 和专属数据库表已经移除，同时保留用户记忆、知识、会话连续性、任务事实和角色人格。
 
-> 当前状态（2026-08-02）：RETIRE.0～RETIRE.3、LOG.1～LOG.5、CYR.1/CYR.1S 已合入 `main`。CYR.2A TaskRun 持久执行骨架位于 `agent/cyr2-taskrun-foundation`（`e477bff`）；CYR.2B 首批 revision 并发合同位于堆叠分支 `agent/cyr2b-concurrency-contract`（`abdb463`，PR #4），两层均已完成工程验证但尚未合入 `main`。下一施工批次已冻结为“合同闭合”：API 与领域层强制 CAS、完整状态矩阵、精确语义幂等、统一 409、计划批准边界和节点跳过证据；目前只完成设计，尚未实施。真实使用观察因需要时间暂缓，不阻塞本轮工程门禁。
+> 当前状态（2026-08-04）：RETIRE.0～RETIRE.3、LOG.1～LOG.5、CYR.1/CYR.1S、CYR.2A 与 CYR.2B（合同闭合 + UX 工作台）均已合入 `main`。CYR.2B 收口内容包括：Schema 87 纯 Run/Node 合同内核、API 与领域层强制 CAS、统一 `{code,message,retry,current}` 409、精确语义幂等、计划批准只绑定 `plan_version`，以及多节点计划编辑、执行历史/再次执行和 TaskRun 专用 body-free 事件 SSE（游标补齐与 gap 恢复）。下一施工批次为 CYR.2C：单 Agent Planner、来源引用、恢复策略与用户锁定节点。真实使用观察继续作为软指标推进，不阻塞本轮工程门禁。
 
 Persona v2.3 只依赖资源完整性和模型基本兼容能力，不依赖逐模型“认证”才能运行。模型固定集结果仅显示为已验证/未验证并用于发布质量管理；更换模型、Provider 或接口地址不会让 Persona 回退，也不会由 Persona 强制采样参数。
 
@@ -79,16 +79,17 @@ LIFE 专属日程、日记和生活事件 decision kind 已随 RETIRE.1 删除�
 - 用户、项目、文档和工具事实构成的 Personal World Model。
 - 实体消歧、合并、拆分和非破坏性维护。
 
-### TaskRun 执行工作台（CYR.2A）
+### TaskRun 执行工作台（CYR.2A / CYR.2B 完成）
 
 - `Task` 保存用户目标，`TaskRun` 保存一次具体执行，`TaskNode` 保存有依赖和验收条件的步骤。
 - 计划写入前验证引用与有向无环图；节点证据驱动进度、失败与完成，模型文字不能直接宣告成功。
 - 支持批准、开始、暂停、继续、取消和重新规划；重复取消与暂停幂等。
 - 应用重启会把遗留执行标为 `recovery_required`，等待用户明确继续，不在退出后秘密运行。
 - TaskRun 通过 `trace_id` 关联诊断日志与 ToolRun，并可保存未来正式 Artifact 的 ID 引用。
-- 当前任务台提供最小执行卡片；结构化多节点计划编辑器仍属于 CYR.2B，Agent Planner 属于 CYR.2C。
-- CYR.2B 首批已经支持客户端携带 `expected_revision`、409 当前快照和前端冲突刷新；当前字段仍可选，因此准确状态是“支持冲突检测但尚未强制所有修改调用 CAS”。
-- 下一批合同闭合设计要求 API 与领域层双层强制 revision、完整 Run/Node 矩阵、精确语义幂等、统一结构化 409，并冻结“计划批准不等于工具或权限授权”。
+- 任务台提供结构化多节点计划编辑器（依赖与验收条件）、节点跳过证据、执行历史与“再次执行”，以及 TaskRun 专用 body-free 事件 SSE（游标补齐与 gap 恢复）；Agent Planner 属于 CYR.2C。
+- CYR.2B 合同闭合批次已落地 Schema 87、纯 Run/Node 决策矩阵、API 与领域层双层强制 CAS、精确语义幂等、统一 `{code,message,retry,current}` 409 和拒绝零写入。
+- `start`/`resume`、Task 投影、节点刷新与事件现在同事务提交；当前计划批准绑定 `plan_version`，节点跳过保存稳定原因并解除下游依赖，终态仍可追加真实晚到 ArtifactRef。
+- 计划批准只批准当前计划，不授予文件、网络、工具、账号或外部消息权限；正式权限与确认仍由 CYR.3 的 ToolRegistry / PermissionGuard / ConfirmationRequest 负责。
 - CYR.2B 借鉴 LangGraph 的 checkpoint/interrupt、Temporal 的事务事件历史与 Update validator、Prefect 的暂停输入和运行状态 UI；补充参考 Xiaoda Agent 的 skipped 依赖防死锁、超时有界和审批 fail-closed 固定集。只采用协议思想，不引入外部编排运行时、多 Agent 黑板或第二套状态数据库。
 
 详细状态机、API、隐私边界和后续施工见 [CYR.2 TaskRun 执行工作台施工计划](docs/CYR2_TASKRUN_EXECUTION_WORKBENCH_PLAN.md)。
@@ -282,7 +283,7 @@ npm.cmd test
 npm.cmd run build
 ```
 
-2026-08-02 最新门禁：后端全量 `2529 passed`；TaskRun 定向 `11 passed`；前端 `83 passed`；Electron 生命周期合同 `4 passed`；Vite 生产构建、Python `compileall` 与 `git diff --check` 通过。Persona 启动自检最近实测仍为 v2.3 `1442 tokens`、v2.2 `1400 tokens`、emergency `195 tokens`。现存提示仅为 Starlette/httpx 弃用提醒、测试缓存目录权限提醒，以及 Live2D Classic 脚本的既有 Vite 打包提示。真实使用观察仍待后续进行。
+2026-08-04 最新门禁：后端全量 `2754 passed`；TaskRun 合同、Schema 87、领域/HTTP 与 SSE 定向 `30 passed`；前端 `87 passed`（含 Electron 生命周期合同）；Vite 生产构建、Python `compileall` 与 `git diff --check` 通过。Persona 启动自检最近实测仍为 v2.3 `1442 tokens`、v2.2 `1400 tokens`、emergency `195 tokens`。现存提示仅为 Starlette/httpx 弃用提醒、测试缓存目录权限提醒，以及 Live2D Classic 脚本的既有 Vite 打包提示。真实使用观察继续作为软指标。
 
 退役施工必须额外验证：
 
@@ -302,6 +303,7 @@ npm.cmd run build
 | [CYR.1 单 Agent 与 Persona v2.3 施工计划](docs/CYR1_SINGLE_AGENT_PERSONA_V23_PLAN.md) | 单一遐蝶 Agent、自动表达策略、Persona 版本回退与 WorldBook 边界 |
 | [CYR.2 TaskRun 执行工作台施工计划](docs/CYR2_TASKRUN_EXECUTION_WORKBENCH_PLAN.md) | TaskRun/TaskNode 状态机、计划、恢复、取消、审计与任务台 |
 | [CYR.2B 合同闭合批次设计](docs/superpowers/specs/2026-08-02-cyr2b-contract-closure-design.md) | 强制 revision、状态矩阵、语义幂等、统一错误合同与批准边界 |
+| [CYR.2B 收口验收报告](docs/reports/cyr2b-closure-acceptance.md) | CYR.2B 合同闭合与 UX 工作台门禁与交付记录 |
 | [Cyrene 风格实验计划](docs/CYRENE_STYLE_AGENT_EXPERIMENT_PLAN.md) | 单 Agent 行为质量与能力分层实验路线 |
 | [Cyrene 风格助手长期规划](docs/CYRENE_STYLE_AGENT_LONG_TERM_ROADMAP.md) | Task、Tool、Research、MCP 与 Worker 长期路线 |
 | [项目上下文](docs/CODEX_PROJECT_CONTEXT.md) | 开发与治理约束 |
@@ -325,7 +327,7 @@ npm.cmd run build
 4. `[x]` RETIRE.3：Schema 84 备份并删除 LIFE 专属表。
 5. `[x]` LOG.0：可观测性、诊断日志、隐私和 ToolRun v2 协议冻结。
 6. `[x]` LOG.1～LOG.5 实验基线：统一 Logger、TraceContext、实时诊断终端、Electron 日志和支持包；发布级故障注入与负载硬化继续保留为门禁。
-7. `[-]` CYR.1～CYR.3：CYR.1/CYR.1S 已完成；CYR.2A 与 CYR.2B revision 首批已在堆叠分支完成工程验证、待按顺序合入；下一批先闭合强制 CAS、状态矩阵、幂等、统一错误与批准边界，再推进多节点编辑、实时状态、历史和 Agent Planner；随后进入 ToolRegistry、权限和正式 Artifact。
+7. `[-]` CYR.1～CYR.3：CYR.1/CYR.1S、CYR.2A 与 CYR.2B（合同闭合 + UX 工作台）已完成并合入 `main`；下一批次为 CYR.2C 单 Agent Planner 与恢复策略；随后进入 ToolRegistry、权限和正式 Artifact。
 8. `[ ]` PLUG.0～PLUG.4：MoFox 风格插件宿主、Manifest、生命周期、权限和隔离；Feeling 作为插件候选。
 9. `[ ]` Web/Research、文件与代码工具、MCP 接入。
 10. `[ ]` PresentationAdapter 解耦并在替代入口稳定后移除 Live2D。
@@ -334,3 +336,4 @@ npm.cmd run build
 ## 许可证
 
 项目代码遵循仓库 [LICENSE](LICENSE)。第三方模型、Live2D、字体、KFC 参考包和其他资产分别受其原许可证约束；源码级复用前必须确认兼容性和再分发权。
+> CYR.2B-UX (2026-08-04): TaskRun now includes editable multi-node plans, dependencies, completion criteria, plan-approval boundary copy, skip evidence, execution history, re-run, and a separate body-free cursor SSE stream. Agent planning remains CYR.2C; tool permissions remain CYR.3.

@@ -1,7 +1,7 @@
 # Xiadie Cyrene 风格助手路线长期规划
 
-- 版本：v1.1
-- 日期：2026-08-02
+- 版本：v1.2
+- 日期：2026-08-04
 - 状态：长期产品与工程路线
 - 适用仓库：`Xiadie-experiment`
 
@@ -171,7 +171,7 @@ LOG.1～LOG.5 已可供实验版日常诊断使用。Windows 打包态只读目�
 - [x] CYR.2A：支持计划 DAG 校验、开始、暂停、继续、取消、重新规划和节点证据推进。
 - [x] CYR.2A：启动时将遗留 running 标为 `recovery_required`，不在应用退出时秘密执行。
 - [x] CYR.2A：主窗口显示状态、进度、等待原因、错误、下一动作和最小操作入口。
-- [ ] CYR.2B：多节点计划编辑、用户修改、乐观并发、HTTP 固定集与实时更新。
+- [x] CYR.2B：多节点计划编辑、用户修改、乐观并发（强制 CAS）、HTTP 固定集与实时更新（body-free SSE）。
 - [ ] CYR.2C：单 Agent Planner、来源引用、恢复策略与用户锁定节点。
 - [ ] CYR.2D：取消竞态、崩溃、打包态与全链路工作台验收。
 
@@ -472,3 +472,7 @@ CYR.1S 已开始补齐退场前置设施：逐资源启动自检、body-free 失
 - 每项退场都要有数量对账、抽样内容核对、失败回滚、备份恢复、隐私删除传播和启动器升级测试。
 
 任何退场提交都必须同时更新 README、本路线、迁移文档和测试，并在诊断日志中保留足以解释升级失败的版本信息。
+
+## CYR.2B closure record (2026-08-04)
+
+CYR.2B (contract closure + UX workbench) has been merged into `main`. The workbench provides editable DAG plans, dependency and completion-criteria editing, plan-approval boundary copy, node skip evidence, run history and re-run, plus a TaskRun-specific body-free event SSE with cursor gap recovery. It does not add another agent, convert plan approval into tool permission, or introduce background execution. The next boundary is CYR.2C Agent Planner and recovery strategy; CYR.3 remains responsible for ToolRegistry, grants, and confirmations.

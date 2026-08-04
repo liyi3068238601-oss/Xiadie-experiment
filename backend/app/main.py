@@ -3,12 +3,13 @@
 分层职责（需求第 10 节）：模型、会话、任务、记忆、工具，均保存在本地 SQLite。
 不做多窗口调度、不推倒重写。此文件只负责 HTTP 接口与编排。
 """
+import asyncio
 import hashlib
 import json
 import logging
 import time
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Literal, Optional
 from urllib.parse import unquote
 
 from fastapi import FastAPI, HTTPException, Request
@@ -3337,26 +3338,28 @@ class TaskPlanNodeIn(BaseModel):
 class TaskPlanIn(BaseModel):
     nodes: list[TaskPlanNodeIn] = Field(min_length=1, max_length=50)
     requires_approval: bool = False
-    expected_revision: Optional[int] = Field(default=None, ge=1)
+    expected_revision: int = Field(ge=1)
 
 
 class TaskRunRevisionIn(BaseModel):
-    expected_revision: Optional[int] = Field(default=None, ge=1)
+    expected_revision: int = Field(ge=1)
 
 
 class TaskNodeActionIn(BaseModel):
-    action: str
-    expected_revision: Optional[int] = Field(default=None, ge=1)
+    action: Literal["start", "succeed", "fail", "skip"]
+    expected_revision: int = Field(ge=1)
     output_summary: str = Field(default="", max_length=500)
     error_code: Optional[str] = Field(default=None, max_length=120)
     error_message: Optional[str] = Field(default=None, max_length=500)
+    reason_code: Optional[str] = Field(default=None, max_length=120)
+    reason_summary: str = Field(default="", max_length=240)
 
 
 class TaskArtifactLinkIn(BaseModel):
     artifact_id: str = Field(min_length=1, max_length=120)
     node_id: Optional[str] = None
     label: str = Field(default="", max_length=120)
-    expected_revision: Optional[int] = Field(default=None, ge=1)
+    expected_revision: int = Field(ge=1)
 
 
 def _task_run_call(operation):
@@ -3364,7 +3367,9 @@ def _task_run_call(operation):
         return operation()
     except task_runs.TaskRunConflict as error:
         raise HTTPException(409, {
-            "code": "task_run_revision_conflict",
+            "code": error.code,
+            "message": error.message,
+            "retry": error.retry,
             "current": error.current,
         }) from error
     except task_runs.TaskRunError as error:
@@ -3464,6 +3469,55 @@ def get_task_run(run_id: str) -> dict:
     return result
 
 
+@app.get("/api/task-runs/{run_id}/events")
+def get_task_run_events(run_id: str, after: Optional[str] = None,
+                        limit: int = 200) -> dict:
+    """Bounded TaskRun business-event catch-up for reconnecting workbenches."""
+    try:
+        return task_runs.list_events(run_id, after=after, limit=limit)
+    except task_runs.TaskRunError as error:
+        raise HTTPException(404, str(error)) from error
+
+
+@app.get("/api/task-runs/{run_id}/events/stream")
+async def stream_task_run_events(run_id: str, request: Request,
+                                 after: Optional[str] = None) -> StreamingResponse:
+    """SSE projection of TaskRun events; snapshots remain on the ordinary GET route."""
+    def encode(event: str, payload: dict, event_id: str | None = None) -> str:
+        prefix = f"id: {event_id}\n" if event_id else ""
+        return f"{prefix}event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+    try:
+        initial = task_runs.list_events(run_id, after=after)
+    except task_runs.TaskRunError as error:
+        raise HTTPException(404, str(error)) from error
+
+    async def generate():
+        cursor = after
+        if initial["gap"]:
+            yield encode("gap", {"run_id": run_id, "cursor": after})
+            return
+        yield encode("ready", {"run_id": run_id, "cursor": initial["cursor"]})
+        for item in initial["events"]:
+            cursor = item["id"]
+            yield encode("task_run_event", item, item["id"])
+        while not await request.is_disconnected():
+            await asyncio.sleep(0.75)
+            update = task_runs.list_events(run_id, after=cursor)
+            if update["gap"]:
+                yield encode("gap", {"run_id": run_id, "cursor": cursor})
+                return
+            for item in update["events"]:
+                cursor = item["id"]
+                yield encode("task_run_event", item, item["id"])
+            if not update["events"]:
+                yield ": heartbeat\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream", headers={
+        "Cache-Control": "no-cache", "X-Accel-Buffering": "no",
+    })
+
+
 @app.put("/api/task-runs/{run_id}/plan")
 def replace_task_run_plan(run_id: str, body: TaskPlanIn) -> dict:
     nodes = [item.model_dump() for item in body.nodes]
@@ -3474,44 +3528,44 @@ def replace_task_run_plan(run_id: str, body: TaskPlanIn) -> dict:
 
 
 @app.post("/api/task-runs/{run_id}/approve")
-def approve_task_run(run_id: str, body: Optional[TaskRunRevisionIn] = None) -> dict:
+def approve_task_run(run_id: str, body: TaskRunRevisionIn) -> dict:
     return _task_run_call(lambda: task_runs.approve(
-        run_id, expected_revision=body.expected_revision if body else None,
+        run_id, expected_revision=body.expected_revision,
     ))
 
 
 @app.post("/api/task-runs/{run_id}/start")
-def start_task_run(run_id: str, body: Optional[TaskRunRevisionIn] = None) -> dict:
+def start_task_run(run_id: str, body: TaskRunRevisionIn) -> dict:
     return _task_run_call(lambda: task_runs.start(
-        run_id, expected_revision=body.expected_revision if body else None,
+        run_id, expected_revision=body.expected_revision,
     ))
 
 
 @app.post("/api/task-runs/{run_id}/pause")
-def pause_task_run(run_id: str, body: Optional[TaskRunRevisionIn] = None) -> dict:
+def pause_task_run(run_id: str, body: TaskRunRevisionIn) -> dict:
     return _task_run_call(lambda: task_runs.pause(
-        run_id, expected_revision=body.expected_revision if body else None,
+        run_id, expected_revision=body.expected_revision,
     ))
 
 
 @app.post("/api/task-runs/{run_id}/resume")
-def resume_task_run(run_id: str, body: Optional[TaskRunRevisionIn] = None) -> dict:
+def resume_task_run(run_id: str, body: TaskRunRevisionIn) -> dict:
     return _task_run_call(lambda: task_runs.resume(
-        run_id, expected_revision=body.expected_revision if body else None,
+        run_id, expected_revision=body.expected_revision,
     ))
 
 
 @app.post("/api/task-runs/{run_id}/cancel")
-def cancel_task_run(run_id: str, body: Optional[TaskRunRevisionIn] = None) -> dict:
+def cancel_task_run(run_id: str, body: TaskRunRevisionIn) -> dict:
     return _task_run_call(lambda: task_runs.cancel(
-        run_id, expected_revision=body.expected_revision if body else None,
+        run_id, expected_revision=body.expected_revision,
     ))
 
 
 @app.post("/api/task-runs/{run_id}/replan")
-def replan_task_run(run_id: str, body: Optional[TaskRunRevisionIn] = None) -> dict:
+def replan_task_run(run_id: str, body: TaskRunRevisionIn) -> dict:
     return _task_run_call(lambda: task_runs.replan(
-        run_id, expected_revision=body.expected_revision if body else None,
+        run_id, expected_revision=body.expected_revision,
     ))
 
 
@@ -3520,6 +3574,7 @@ def act_on_task_node(run_id: str, node_id: str, body: TaskNodeActionIn) -> dict:
     return _task_run_call(lambda: task_runs.transition_node(
         run_id, node_id, body.action, output_summary=body.output_summary,
         error_code=body.error_code, error_message=body.error_message,
+        reason_code=body.reason_code, reason_summary=body.reason_summary,
         expected_revision=body.expected_revision,
     ))
 

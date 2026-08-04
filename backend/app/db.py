@@ -8,6 +8,11 @@ import sqlite3
 import time
 import uuid
 
+
+class SchemaMigrationError(RuntimeError):
+    """Raised when persisted evidence cannot be migrated without guessing."""
+
+
 DEFAULT_MEMORY_ENABLED = "1"
 
 RETIRED_LIFE_TABLES = (
@@ -4298,6 +4303,21 @@ MIGRATIONS = [
             ON task_run_artifact_links(task_run_id,created_at,id);
         """,
     ),
+    (
+        87,
+        """
+        -- CYR.2B: current plan approval and node skip evidence.
+        ALTER TABLE task_runs ADD COLUMN requires_approval INTEGER NOT NULL DEFAULT 0
+            CHECK(requires_approval IN (0,1));
+        ALTER TABLE task_runs ADD COLUMN approved_plan_version INTEGER
+            CHECK(approved_plan_version IS NULL OR approved_plan_version >= 1);
+        ALTER TABLE task_runs ADD COLUMN approved_at REAL;
+        ALTER TABLE task_nodes ADD COLUMN skip_reason_code TEXT
+            CHECK(skip_reason_code IS NULL OR length(skip_reason_code) BETWEEN 1 AND 120);
+        ALTER TABLE task_nodes ADD COLUMN skip_reason_summary TEXT
+            CHECK(skip_reason_summary IS NULL OR length(skip_reason_summary) <= 240);
+        """,
+    ),
 ]
 
 # 默认供应商：全部 OpenAI-Compatible。api_key 开发期存本地库，
@@ -4413,13 +4433,93 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
             continue
         if target == 84:
             _backup_retired_life_tables(conn)
-        conn.executescript(sql)
+        if target == 87:
+            _apply_task_run_schema_87(conn, sql)
+        else:
+            conn.executescript(sql)
         conn.execute(
             "INSERT INTO schema_meta(key, value) VALUES('schema_version', ?)"
             " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (str(target),),
         )
         version = target
+
+
+_ACTIVE_OR_TERMINAL_TASK_RUN_STATES = frozenset({
+    "ready", "running", "paused", "recovery_required", "failed", "completed", "cancelled",
+})
+
+
+def _task_run_event_metadata(value: object) -> dict:
+    try:
+        metadata = json.loads(str(value or "{}"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _apply_task_run_schema_87(conn: sqlite3.Connection, sql: str) -> None:
+    """Add approval evidence without inferring permission from a run state."""
+    conn.execute("SAVEPOINT schema_87")
+    try:
+        for statement in sql.split(";"):
+            if statement.strip():
+                conn.execute(statement)
+        runs = conn.execute(
+            "SELECT id,status,plan_version FROM task_runs ORDER BY id"
+        ).fetchall()
+        for run in runs:
+            replacements = conn.execute(
+                "SELECT metadata_json,created_at FROM task_run_events "
+                "WHERE task_run_id=? AND event_type='task_plan_replaced' "
+                "ORDER BY created_at DESC,id DESC",
+                (run["id"],),
+            ).fetchall()
+            replacement = None
+            for event in replacements:
+                metadata = _task_run_event_metadata(event["metadata_json"])
+                if int(metadata.get("plan_version", -1)) == int(run["plan_version"]):
+                    replacement = (metadata, float(event["created_at"]))
+                    break
+            if replacement is None or "requires_approval" not in replacement[0]:
+                requires_approval = run["status"] == "awaiting_approval"
+            else:
+                requires_approval = replacement[0]["requires_approval"] is True
+            approved_version = None
+            approved_at = None
+            if requires_approval:
+                approval_rows = conn.execute(
+                    "SELECT metadata_json,created_at FROM task_run_events "
+                    "WHERE task_run_id=? AND event_type='task_plan_approved' "
+                    "ORDER BY created_at DESC,id DESC",
+                    (run["id"],),
+                ).fetchall()
+                for event in approval_rows:
+                    metadata = _task_run_event_metadata(event["metadata_json"])
+                    if int(metadata.get("plan_version", -1)) == int(run["plan_version"]):
+                        approved_version = int(run["plan_version"])
+                        approved_at = float(event["created_at"])
+                        break
+                if (
+                    run["status"] in _ACTIVE_OR_TERMINAL_TASK_RUN_STATES
+                    and run["status"] != "awaiting_approval"
+                    and approved_version is None
+                    and replacement is not None
+                    and replacement[0].get("requires_approval") is True
+                ):
+                    raise SchemaMigrationError(
+                        "schema_87_task_plan_approval_evidence_missing"
+                    )
+            conn.execute(
+                "UPDATE task_runs SET requires_approval=?,approved_plan_version=?,approved_at=? "
+                "WHERE id=?",
+                (int(requires_approval), approved_version, approved_at, run["id"]),
+            )
+        conn.execute("RELEASE SAVEPOINT schema_87")
+    except Exception:
+        conn.execute("ROLLBACK TO SAVEPOINT schema_87")
+        conn.execute("RELEASE SAVEPOINT schema_87")
+        raise
 
 
 def _backup_retired_life_tables(conn: sqlite3.Connection) -> str:

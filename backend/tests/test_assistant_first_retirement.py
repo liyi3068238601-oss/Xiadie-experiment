@@ -48,7 +48,7 @@ def test_retired_tables_are_absent_and_recovery_backup_exists():
         ).fetchone()[0]
     finally:
         conn.close()
-    assert version == "86"
+    assert version == "87"
     assert not set(db.RETIRED_LIFE_TABLES) & tables
     assert {"short_memos", "short_memo_events", "reminders", "tasks"} <= tables
     assert os.path.exists(os.path.join(

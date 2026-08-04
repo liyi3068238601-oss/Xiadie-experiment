@@ -1,12 +1,14 @@
 # CYR.2B 合同闭合批次设计
 
-> 状态：设计已批准，等待用户复核书面规格后进入详细实施计划
+> 状态：已实现、通过本地工程门禁并随 CYR.2B UX 工作台于 2026-08-04 合入 `main` 收口
 > 决策日期：2026-08-02
 > 适用范围：TaskRun 并发合同、状态矩阵、幂等、计划批准边界、节点跳过证据
 > 前置基线：CYR.2A `e477bff`；CYR.2B revision 并发合同 `abdb463` / PR #4
 > 后续批次：多节点计划编辑器、TaskRun SSE、执行历史与再次执行、CYR.2C Planner
 
 ## 1. 当前施工痕迹
+
+> 以下列表保留设计冻结时的基线记录；实际实施结果见 1.1。
 
 截至本设计冻结时，仓库的实际落点为：
 
@@ -19,6 +21,17 @@
 - 设计冻结后补充只读评估 [Xiaoda Agent](https://github.com/long-safe-accont-4567-uvwxyz-9876/xiaoda-agent)（用户提供的 `nahida-agent` 地址当前重定向到该仓库；MIT；评估基线 `35e42de`）。本批只吸收其测试和边界思想，不复制代码、不引入依赖。
 
 下一批实施前先闭合合入链：CYR.2A 进入 `main`，再让 PR #4 基于并进入更新后的 `main`；之后从新 `main` 建立独立合同闭合分支。改变 PR 目标与实际合并仍属于外部操作，实施时单独征得用户确认。
+
+### 1.1 实际实施记录
+
+- 既定合入链已通过 PR #5 进入 `main`；本批从 `main@f3437a30231015274e64be3c6b22c1ef8c0b00a0` 建立 `agent/cyr2b-contract-closure`。
+- 实现与设计一致：新增纯 `task_run_contract`，升级 Schema 87，API 与领域公共入口强制 CAS，统一 409，闭合 `start`/`resume` 事务，并完成批准、skip 和 ArtifactRef 证据规则。
+- 前端仅做合同适配：接收同 Run 且不旧的冲突快照，无效快照 GET 回退，不自动重放 mutation，并显示计划批准权限边界；没有增加 skip 控件、多节点编辑器、轮询或 SSE。
+- 没有引入外部编排器、第二数据库、Xiaoda Agent 代码或新运行时依赖，也没有扩大 CYR.3 权限范围。
+- 2026-08-02 本地最终门禁：后端全量 `2752 passed`；合同/Schema 87/领域/HTTP 定向 `234 passed`；前端 `85 passed`；Electron 生命周期 `4 passed`；Vite build、Python `compileall` 与 `git diff --check` 通过。
+- 首轮全量后端曾因 CDS.9 已提交报告仍记 Schema 86 而出现 `1 failed, 2747 passed`；重新生成 CDS.9/CDS.10 schema 报告后，受影响固定集与全量后端均通过。提交前复核又补齐不存在对象优先返回 404、未知节点动作 422、无关证据字段清空，以及“不同命令竞争产生一次应用和一次 revision 409”的固定集；现存非阻塞提示仍为 Starlette/httpx 弃用、pytest cache 权限及 Live2D Classic Vite 提示。
+- 实现提交为 `dafa730`（`feat(taskrun): close CYR.2B mutation contracts`）；本记录随后以独立文档提交补记该 SHA。
+- UX 工作台提交 `519f574`（`feat(taskrun): complete CYR.2B UX workbench`）补齐多节点计划编辑、执行历史/再次执行与 body-free 事件 SSE；CYR.2B 于 2026-08-04 合入 `main` 收口，验收记录见 `docs/reports/cyr2b-closure-acceptance.md`。
 
 ## 2. 批次目标与非目标
 
