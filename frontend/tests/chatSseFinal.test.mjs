@@ -8,6 +8,16 @@ const typedProtocol = await readFile(
   new URL("../src/chatSseProtocol.ts", import.meta.url), "utf8",
 );
 
+test("plan_proposal event dispatches to onPlanProposal", () => {
+  const calls = [];
+  dispatchChatSseEvent("plan_proposal", { goal_summary: "x" }, {
+    onPlanProposal: (p) => calls.push(p),
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].goal_summary, "x");
+  assert.match(typedProtocol, /onPlanProposal/);
+});
+
 test("authoritative final replaces streamed text before done", () => {
   let text = "";
   let done = null;

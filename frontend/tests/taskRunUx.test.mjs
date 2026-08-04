@@ -22,3 +22,12 @@ test("planner, evidence and repeat execution remain visible TaskRun actions", ()
   assert.match(tasks, /查看事件/);
   assert.match(tasks, /nodeAction\(run, node, "skip"\)/);
 });
+
+test("CYR.2C planner endpoints and proposal types are wired in api", () => {
+  assert.match(api, /createTaskRunFromProposal/);
+  assert.match(api, /\/api\/task-runs\/from-proposal/);
+  assert.match(api, /plannerProposal/);
+  assert.match(api, /\/api\/task-runs\/\$\{encodeURIComponent\(runId\)\}\/planner-proposal/);
+  assert.match(api, /onPlanProposal/);
+  assert.match(api, /TaskSourceLink/);
+});

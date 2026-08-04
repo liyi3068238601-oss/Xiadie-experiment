@@ -4,6 +4,7 @@ export function dispatchChatSseEvent(event, data, callbacks, state) {
   else if (event === "cancelled") callbacks.onCancelled?.(data);
   else if (event === "delta") callbacks.onDelta?.(data.text);
   else if (event === "error") callbacks.onError?.(data.message, data.hint);
+  else if (event === "plan_proposal") callbacks.onPlanProposal?.(data);
   else if (event === "final") {
     if (state) state.finalSeen = true;
     callbacks.onFinal?.(data);

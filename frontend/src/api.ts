@@ -874,6 +874,16 @@ export type TaskRunStatus =
 export type TaskNodeStatus =
   | "pending" | "ready" | "running" | "blocked"
   | "succeeded" | "failed" | "skipped" | "cancelled";
+export interface TaskSourceLink {
+  id: string;
+  source_kind: "memory_fragment" | "memory_episode" | "memory_saga" | "memory_entity"
+    | "knowledge_source" | "conversation";
+  source_id: string;
+  summary: string;
+  status: "active" | "invalidated";
+  invalidated_at?: number | null;
+  invalidated_reason?: string | null;
+}
 export interface TaskNode {
   id: string;
   task_run_id: string;
@@ -888,6 +898,10 @@ export interface TaskNode {
   error_message?: string | null;
   skip_reason_code?: string | null;
   skip_reason_summary?: string | null;
+  user_locked?: boolean;
+  locked_reason?: "edit" | "explicit" | null;
+  recovery_class?: "side_effect_free" | "idempotent" | "side_effectful" | null;
+  source_links?: TaskSourceLink[];
 }
 export interface TaskRunEvent {
   id: string;
@@ -1546,6 +1560,32 @@ export const linkTaskRunArtifact = (
     artifact_id: artifactId, expected_revision: expectedRevision, ...detail,
   }),
 });
+export interface PlanProposalNode {
+  client_id: string;
+  title: string;
+  depends_on?: string[];
+  completion_criteria?: string;
+  input_refs?: Array<{ source_kind: TaskSourceLink["source_kind"]; source_id: string }>;
+  user_locked?: boolean;
+  locked_reason?: "edit" | "explicit";
+  recovery_class?: TaskNode["recovery_class"];
+}
+export interface PlanProposal {
+  goal_summary: string;
+  requires_approval: boolean;
+  nodes: PlanProposalNode[];
+}
+export const createTaskRunFromProposal = (
+  proposal: PlanProposal,
+  sourceSessionId?: string,
+) => j<TaskRun>("/api/task-runs/from-proposal", {
+  method: "POST",
+  body: JSON.stringify({ ...proposal, source_session_id: sourceSessionId }),
+});
+export const plannerProposal = (runId: string) =>
+  j<PlanProposal>(`/api/task-runs/${encodeURIComponent(runId)}/planner-proposal`, {
+    method: "POST", body: JSON.stringify({}),
+  });
 
 // ---- 模型 / 供应商 ----
 export const listProviders = () => j<Provider[]>("/api/providers");
@@ -1804,6 +1844,7 @@ export interface ChatCallbacks {
     knowledge_recall_mode: "off" | "explicit" | "smart";
   }) => void;
   onDelta?: (text: string) => void;
+  onPlanProposal?: (proposal: PlanProposal) => void;
   onFinal?: (d: {
     message_id: string;
     content: string;
