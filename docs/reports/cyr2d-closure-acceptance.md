@@ -2,7 +2,7 @@
 
 - 批次：CYR.2D（工作台验收与故障加固）
 - 日期：2026-08-04
-- 分支：`agent/cyr2d-acceptance`（合入 `main` 的 merge SHA 见 git 历史）
+- 合入：`agent/cyr2d-acceptance` → `main`（merge `606a530`）
 - 前置基线：CYR.2C 收口（main `48b8305`，merge `d02f50f`）；Schema 88
 
 ## 交付物
