@@ -4,7 +4,7 @@ Xiadie Experiment 保留“遐蝶”的稳定身份、人格和自然表达，�
 
 本仓库不再发展角色离线生活模拟。原 LIFE 生活连续性系统已完成物理退役：运行时代码、UI、API、worker、adapter 和专属数据库表已经移除，同时保留用户记忆、知识、会话连续性、任务事实和角色人格。
 
-> 当前状态（2026-08-04）：RETIRE.0～RETIRE.3、LOG.1～LOG.5、CYR.1/CYR.1S、CYR.2A、CYR.2B、CYR.2C 与 CYR.2D（工作台验收与故障加固）均已合入 `main`。CYR.2D 收口内容包括：单测级 + 进程级故障注入（取消竞态、事务崩溃回滚、数据库忙、陈旧 revision 竞争均验证通过）、进程强杀后 `recovery_required` 的崩溃恢复 E2E、TaskRun 全链路 trace 关联验收，以及多模型 planner 质量固定集（deepseek-v4-pro/flash/chat 当前均记"未验证"，主要卡在输出 JSON 结构合法性）。下一施工批次为 CYR.3：ToolRegistry、权限与正式 Artifact。真实使用观察继续作为软指标推进，不阻塞本轮工程门禁。
+> 当前状态（2026-08-04）：RETIRE.0～RETIRE.3、LOG.1～LOG.5、CYR.1/CYR.1S、CYR.2A～CYR.2D 与 CYR.3（ToolRegistry/权限/Artifact）均已合入 `main`。CYR.3 收口内容包括：首批 5 个只读工具 + `workspace.write_file`（进程内、统一 ToolRun 证据链、绑定 TaskRun 节点执行器）、PermissionGuard 有期限可撤销授权 + 聊天确认卡、Artifact 域（版本/回滚/审计软删/预览）与 RecoveryCheckpoint（恢复面板"重试"接真实执行）。下一施工批次为 PLUG.0～PLUG.4 插件宿主 与 CYR.4 Web/Research。真实使用观察继续作为软指标推进，不阻塞本轮工程门禁。
 
 Persona v2.3 只依赖资源完整性和模型基本兼容能力，不依赖逐模型“认证”才能运行。模型固定集结果仅显示为已验证/未验证并用于发布质量管理；更换模型、Provider 或接口地址不会让 Persona 回退，也不会由 Persona 强制采样参数。
 
