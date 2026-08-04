@@ -3402,6 +3402,91 @@ input[type="range"].xd-range::-moz-range-thumb { width: 20px; height: 20px; bord
   color: var(--text-faint);
   font-size: 9px;
 }
+
+/* CYR.2C 任务工作台：来源引用、锁定与失效横幅（UI 设计 v0.2） */
+.task-node {
+  flex-wrap: wrap;
+}
+.task-node[data-lock="explicit"] {
+  border-left-color: var(--violet);
+}
+.node-lock-pill {
+  padding: 1px 6px;
+  border-radius: 99px;
+  color: #b9a9f7;
+  background: rgba(124, 92, 255, 0.12);
+  font-size: 8px;
+  white-space: nowrap;
+}
+.node-lock-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  border: 1px solid rgba(187, 177, 221, 0.16);
+  border-radius: 6px;
+  color: #aaa3b0;
+  font-size: 9px;
+  background: rgba(124, 92, 255, 0.06);
+}
+.node-lock-btn:hover {
+  color: var(--violet-soft);
+}
+.node-source-row {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.source-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border: 1px solid rgba(157, 132, 255, 0.13);
+  border-radius: 6px;
+  color: #948ba8;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 8px;
+  cursor: help;
+}
+.source-ref-chip.memory {
+  color: #b7a9ea;
+}
+.source-ref-chip.knowledge_source {
+  color: #79bad0;
+}
+.source-ref-chip.conversation {
+  color: #a7d8c2;
+}
+.source-ref-chip.invalid {
+  border-color: rgba(233, 135, 154, 0.4);
+  color: #f0b3bf;
+  background: rgba(233, 135, 154, 0.07);
+  text-decoration: line-through;
+}
+.run-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+}
+.run-banner strong {
+  font-size: 10px;
+}
+.run-banner.invalid {
+  border-color: rgba(233, 135, 154, 0.35);
+  background: rgba(233, 135, 154, 0.06);
+  border-left: 3px solid var(--danger);
+}
+.run-banner.invalid strong {
+  color: #f0b3bf;
+}
+.task-plan-node[data-lock="explicit"] {
+  border-left-color: var(--violet);
+}
 .context-diagnostic-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

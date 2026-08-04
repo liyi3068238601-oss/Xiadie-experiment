@@ -31,3 +31,12 @@ test("CYR.2C planner endpoints and proposal types are wired in api", () => {
   assert.match(api, /onPlanProposal/);
   assert.match(api, /TaskSourceLink/);
 });
+
+test("CYR.2C workbench exposes replan, locks and source chips", () => {
+  assert.match(tasks, /重新生成计划/);
+  assert.match(tasks, /replanWithPlanner/);
+  assert.match(tasks, /source-ref-chip/);
+  assert.match(tasks, /node-lock-pill/);
+  assert.match(tasks, /lockUiState\(node\)/);
+  assert.match(tasks, /run-banner invalid/);
+});

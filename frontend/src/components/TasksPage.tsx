@@ -2,9 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import * as api from "./../api";
 import { toast } from "./../store";
+import { lockUiState } from "../taskPlanUi.mjs";
 import { Icon } from "./Icon";
 
-type DraftNode = { client_id: string; title: string; depends_on: string[]; completion_criteria: string };
+type DraftNode = {
+  client_id: string;
+  title: string;
+  depends_on: string[];
+  completion_criteria: string;
+  input_refs?: Array<{ source_kind: api.TaskSourceLink["source_kind"]; source_id: string }>;
+  user_locked?: boolean;
+  locked_reason?: "edit" | "explicit" | null;
+  recovery_class?: api.TaskNode["recovery_class"];
+};
 type PlanEditor = { taskId: string; runId: string; revision: number; requiresApproval: boolean; nodes: DraftNode[] };
 const TERMINAL: api.TaskRunStatus[] = ["completed", "failed", "cancelled"];
 const RUN_LABELS: Record<api.TaskRunStatus, string> = {
@@ -84,8 +94,54 @@ export function TasksPage() {
   };
 
   const openEditor = (taskId: string, run: api.TaskRun, fallbackTitle: string) => {
-    const nodes = run.nodes?.map((node) => ({ client_id: node.client_id, title: node.title, depends_on: node.depends_on, completion_criteria: node.completion_criteria })) || [defaultNode(fallbackTitle)];
+    const nodes = run.nodes?.map((node) => ({
+      client_id: node.client_id,
+      title: node.title,
+      depends_on: node.depends_on,
+      completion_criteria: node.completion_criteria,
+      input_refs: (node.source_links || []).map((link) => ({ source_kind: link.source_kind, source_id: link.source_id })),
+      user_locked: Boolean(node.user_locked),
+      locked_reason: node.locked_reason || null,
+      recovery_class: node.recovery_class || null,
+    })) || [defaultNode(fallbackTitle)];
     setEditor({ taskId, runId: run.id, revision: run.revision, requiresApproval: Boolean(run.requires_approval), nodes });
+  };
+  const touchNode = (clientId: string, patch: Partial<DraftNode>) =>
+    setEditor((current) => current ? {
+      ...current,
+      nodes: current.nodes.map((node) => node.client_id === clientId
+        ? { ...node, ...patch, user_locked: true, locked_reason: "edit" } : node),
+    } : current);
+  const toggleLock = (clientId: string) =>
+    setEditor((current) => current ? {
+      ...current,
+      nodes: current.nodes.map((node) => node.client_id === clientId
+        ? (node.user_locked
+            ? { ...node, user_locked: false, locked_reason: null }
+            : { ...node, user_locked: true, locked_reason: "explicit" })
+        : node),
+    } : current);
+  const replanWithPlanner = async (task: api.Task, run: api.TaskRun) => {
+    const lockedCount = (run.nodes || []).filter((node) => node.user_locked).length;
+    if (!window.confirm(`重新生成会保留 ${lockedCount} 个已锁定节点；未锁定节点可能被改写。`)) return;
+    try {
+      const proposal = await api.plannerProposal(run.id);
+      setEditor({
+        taskId: task.id, runId: run.id, revision: run.revision,
+        requiresApproval: proposal.requires_approval,
+        nodes: proposal.nodes.map((node) => ({
+          client_id: node.client_id,
+          title: node.title,
+          depends_on: node.depends_on || [],
+          completion_criteria: node.completion_criteria || "",
+          input_refs: node.input_refs || [],
+          user_locked: Boolean(node.user_locked),
+          locked_reason: node.locked_reason || (node.user_locked ? "explicit" : null),
+          recovery_class: node.recovery_class || null,
+        })),
+      });
+      toast("候选计划已生成，请审阅后提交（锁定节点不会改动）。");
+    } catch (reason: any) { toast(reason?.message || "候选计划生成失败"); }
   };
   const createExecution = async (task: api.Task) => {
     try {
@@ -161,11 +217,11 @@ export function TasksPage() {
     {error && <div className="empty">加载出错：{error}</div>}{!error && loading && <div className="empty">正在整理任务…</div>}
     {!error && !loading && groups.map((group) => group.items.length > 0 && <section className={`task-group ${group.key}`} key={group.key}><header><span>{group.label}</span><b>{group.items.length}</b></header>{group.items.map((task) => {
       const done = task.status === "done"; const run = runs[task.id]; const items = history[task.id] || [];
-      return <article className="task-item task-workbench" key={task.id}><div className="task-primary-row"><button className={`task-check${done ? " checked" : ""}`} aria-label={done ? "标记为待办" : "标记为完成"} onClick={() => void changeStatus(task.id, done ? "todo" : "done")}>{done ? "✓" : ""}</button><div className="task-copy"><strong>{task.title}</strong><div><SourceChip source={task.source} />{task.due_date && <span>{task.due_date}</span>}{run && <span className={`task-run-status ${run.status}`}>{RUN_LABELS[run.status]}</span>}</div></div><div className="task-actions">{!run && !done && <button onClick={() => void createExecution(task)}>建立执行</button>}{run?.status === "awaiting_approval" && <button onClick={() => void runAction(run, "approve")}>批准计划</button>}{run?.status === "ready" && <button onClick={() => void runAction(run, "start")}>开始</button>}{run?.status === "running" && <button onClick={() => void runAction(run, "pause")}>暂停</button>}{(run?.status === "paused" || run?.status === "recovery_required") && <button onClick={() => void runAction(run, "resume")}>继续</button>}{run && !TERMINAL.includes(run.status) && <button onClick={() => void editPlan(task, run)}>编辑计划</button>}<button onClick={() => setHistoryOpen((current) => ({ ...current, [task.id]: !current[task.id] }))}>历史 {items.length}</button><button className="danger" onClick={() => void remove(task.id)}>删除</button></div></div>
-      {run && <div className="task-run-panel"><div className="task-run-progress"><span>{run.progress_current}/{run.progress_total} 步</span><i><b style={{ width: `${run.progress_total ? run.progress_current / run.progress_total * 100 : 0}%` }} /></i><code>{run.id}</code></div>{run.status === "awaiting_approval" && <p>这里只批准计划，不会授予文件、网络或工具权限。</p>}{(run.waiting_reason || run.error_message) && <p className={run.error_message ? "error" : ""}>{run.error_message || run.waiting_reason}</p>}{run.next_action && <p>下一步：{run.next_action}</p>}{run.nodes?.map((node) => <div className={`task-node ${node.status}`} key={node.id}><span>{node.status === "succeeded" ? "✓" : node.position + 1}</span><strong>{node.title}</strong><small>{node.depends_on.length ? `依赖：${node.depends_on.join("、")}` : "无前置依赖"}</small>{node.completion_criteria && <em>验收：{node.completion_criteria}</em>}{node.skip_reason_code && <em>跳过：{node.skip_reason_code}</em>}{run.status === "running" && node.status === "ready" && <button onClick={() => void nodeAction(run, node, "start")}>执行</button>}{run.status === "running" && node.status === "ready" && <button onClick={() => void nodeAction(run, node, "skip")}>跳过</button>}{run.status === "running" && node.status === "running" && <><button onClick={() => void nodeAction(run, node, "succeed")}>完成</button><button className="danger" onClick={() => void nodeAction(run, node, "fail")}>失败</button></>}</div>)}<button className="task-event-toggle" onClick={() => setShowEvents((current) => ({ ...current, [run.id]: !current[run.id] }))}>{showEvents[run.id] ? "收起事件" : `查看事件 ${run.events?.length || 0}`}</button>{showEvents[run.id] && <div className="task-event-list">{run.events?.map((event) => <div key={event.id}><code>r{event.revision}</code><span>{eventLabel(event)}</span>{event.reason_code && <em>{event.reason_code}</em>}</div>)}</div>}</div>}
+      return <article className="task-item task-workbench" key={task.id}><div className="task-primary-row"><button className={`task-check${done ? " checked" : ""}`} aria-label={done ? "标记为待办" : "标记为完成"} onClick={() => void changeStatus(task.id, done ? "todo" : "done")}>{done ? "✓" : ""}</button><div className="task-copy"><strong>{task.title}</strong><div><SourceChip source={task.source} />{task.due_date && <span>{task.due_date}</span>}{run && <span className={`task-run-status ${run.status}`}>{RUN_LABELS[run.status]}</span>}</div></div><div className="task-actions">{!run && !done && <button onClick={() => void createExecution(task)}>建立执行</button>}{run?.status === "awaiting_approval" && <button onClick={() => void runAction(run, "approve")}>批准计划</button>}{run?.status === "ready" && <button onClick={() => void runAction(run, "start")}>开始</button>}{run?.status === "running" && <button onClick={() => void runAction(run, "pause")}>暂停</button>}{(run?.status === "paused" || run?.status === "recovery_required") && <button onClick={() => void runAction(run, "resume")}>继续</button>}{run && !TERMINAL.includes(run.status) && <button onClick={() => void editPlan(task, run)}>编辑计划</button>}{run && !TERMINAL.includes(run.status) && <button onClick={() => void replanWithPlanner(task, run)}>重新生成计划</button>}<button onClick={() => setHistoryOpen((current) => ({ ...current, [task.id]: !current[task.id] }))}>历史 {items.length}</button><button className="danger" onClick={() => void remove(task.id)}>删除</button></div></div>
+      {run && <div className="task-run-panel"><div className="task-run-progress"><span>{run.progress_current}/{run.progress_total} 步</span><i><b style={{ width: `${run.progress_total ? run.progress_current / run.progress_total * 100 : 0}%` }} /></i><code>{run.id}</code></div>{run.status === "awaiting_approval" && <p>这里只批准计划，不会授予文件、网络或工具权限。</p>}{(run.waiting_reason || run.error_message) && <p className={run.error_message ? "error" : ""}>{run.error_message || run.waiting_reason}</p>}{run.next_action && <p>下一步：{run.next_action}</p>}{run.nodes?.some((node) => (node.source_links || []).some((link) => link.status === "invalidated")) && <div className="run-banner invalid" role="alert"><strong>有节点引用已失效，无法开始执行</strong><p>请移除失效引用，或重新生成计划。</p></div>}{run.nodes?.map((node) => <div className={`task-node ${node.status}`} key={node.id} data-lock={node.user_locked ? "explicit" : "none"}><span>{node.status === "succeeded" ? "✓" : node.position + 1}</span><strong>{node.title}</strong>{lockUiState(node).label && <span className="node-lock-pill">{lockUiState(node).label}</span>}<small>{node.depends_on.length ? `依赖：${node.depends_on.join("、")}` : "无前置依赖"}</small>{node.completion_criteria && <em>验收：{node.completion_criteria}</em>}{node.skip_reason_code && <em>跳过：{node.skip_reason_code}</em>}{(node.source_links || []).length > 0 && <div className="node-source-row">{(node.source_links || []).map((link) => <span key={link.id} className={`source-ref-chip ${link.status === "invalidated" ? "invalid" : link.source_kind}`} title={link.invalidated_reason || link.summary || link.source_kind}>{link.source_kind === "knowledge_source" ? "知识" : link.source_kind === "conversation" ? "对话" : "记忆"}</span>)}</div>}{run.status === "running" && node.status === "ready" && <button onClick={() => void nodeAction(run, node, "start")}>执行</button>}{run.status === "running" && node.status === "ready" && <button onClick={() => void nodeAction(run, node, "skip")}>跳过</button>}{run.status === "running" && node.status === "running" && <><button onClick={() => void nodeAction(run, node, "succeed")}>完成</button><button className="danger" onClick={() => void nodeAction(run, node, "fail")}>失败</button></>}</div>)}<button className="task-event-toggle" onClick={() => setShowEvents((current) => ({ ...current, [run.id]: !current[run.id] }))}>{showEvents[run.id] ? "收起事件" : `查看事件 ${run.events?.length || 0}`}</button>{showEvents[run.id] && <div className="task-event-list">{run.events?.map((event) => <div key={event.id}><code>r{event.revision}</code><span>{eventLabel(event)}</span>{event.reason_code && <em>{event.reason_code}</em>}</div>)}</div>}</div>}
       {historyOpen[task.id] && <div className="task-history">{items.length === 0 ? <span>尚无执行历史</span> : items.map((item) => <div key={item.id}><button onClick={() => void api.getTaskRun(item.id).then((detail) => replaceRun(task.id, detail))}><strong>{RUN_LABELS[item.status]}</strong><code>{item.id}</code><small>r{item.revision}</small></button>{TERMINAL.includes(item.status) && <button onClick={() => void rerun(task, item)}>再次执行</button>}</div>)}</div>}
       </article>;
     })}</section>)}
-    {editor && <section className="task-plan-editor" aria-label="计划编辑器"><header><div><strong>编辑执行计划</strong><small>提交会替换当前计划并产生新版本；批准始终只针对该版本。</small></div><button onClick={() => setEditor(null)}>关闭</button></header><label className="task-approval"><input type="checkbox" checked={editor.requiresApproval} onChange={(event) => setEditor({ ...editor, requiresApproval: event.target.checked })} /> 提交后要求明确批准再开始</label>{editor.nodes.map((node, index) => <div className="task-plan-node" key={node.client_id}><div><b>步骤 {index + 1}</b><button onClick={() => setEditor({ ...editor, nodes: editor.nodes.filter((item) => item.client_id !== node.client_id).map((item) => ({ ...item, depends_on: item.depends_on.filter((id) => id !== node.client_id) })) })} disabled={editor.nodes.length === 1}>移除</button></div><input value={node.title} placeholder="步骤标题" onChange={(event) => setEditor({ ...editor, nodes: editor.nodes.map((item) => item.client_id === node.client_id ? { ...item, title: event.target.value } : item) })} /><textarea value={node.completion_criteria} placeholder="验收条件" onChange={(event) => setEditor({ ...editor, nodes: editor.nodes.map((item) => item.client_id === node.client_id ? { ...item, completion_criteria: event.target.value } : item) })} /><label>依赖步骤<select multiple value={node.depends_on} onChange={(event) => setEditor({ ...editor, nodes: editor.nodes.map((item) => item.client_id === node.client_id ? { ...item, depends_on: Array.from(event.currentTarget.selectedOptions, (option) => option.value) } : item) })}>{editor.nodes.filter((item) => item.client_id !== node.client_id).map((item) => <option key={item.client_id} value={item.client_id}>{item.title || item.client_id}</option>)}</select></label></div>)}<footer><button onClick={() => setEditor({ ...editor, nodes: [...editor.nodes, defaultNode("")] })}>添加步骤</button><button className="primary" onClick={() => void savePlan()} disabled={editor.nodes.some((node) => !node.title.trim())}>提交计划</button></footer></section>}
+    {editor && <section className="task-plan-editor" aria-label="计划编辑器"><header><div><strong>编辑执行计划</strong><small>提交会替换当前计划并产生新版本；批准始终只针对该版本。</small></div><button onClick={() => setEditor(null)}>关闭</button></header><label className="task-approval"><input type="checkbox" checked={editor.requiresApproval} onChange={(event) => setEditor({ ...editor, requiresApproval: event.target.checked })} /> 提交后要求明确批准再开始</label>{editor.nodes.map((node, index) => <div className="task-plan-node" data-lock={node.user_locked ? "explicit" : "none"} key={node.client_id}><div><b>步骤 {index + 1}</b>{lockUiState(node).label && <span className="node-lock-pill">{lockUiState(node).label}</span>}<button className="node-lock-btn" aria-label={node.user_locked ? "解锁节点" : "锁定节点"} onClick={() => toggleLock(node.client_id)}>{node.user_locked ? "🔒" : "🔓"}</button><button onClick={() => setEditor({ ...editor, nodes: editor.nodes.filter((item) => item.client_id !== node.client_id).map((item) => ({ ...item, depends_on: item.depends_on.filter((id) => id !== node.client_id) })) })} disabled={editor.nodes.length === 1}>移除</button></div><input value={node.title} placeholder="步骤标题" disabled={node.user_locked} onChange={(event) => touchNode(node.client_id, { title: event.target.value })} /><textarea value={node.completion_criteria} placeholder="验收条件" disabled={node.user_locked} onChange={(event) => touchNode(node.client_id, { completion_criteria: event.target.value })} /><label>依赖步骤<select multiple value={node.depends_on} disabled={node.user_locked} onChange={(event) => touchNode(node.client_id, { depends_on: Array.from(event.currentTarget.selectedOptions, (option) => option.value) })}>{editor.nodes.filter((item) => item.client_id !== node.client_id).map((item) => <option key={item.client_id} value={item.client_id}>{item.title || item.client_id}</option>)}</select></label></div>)}<footer><button onClick={() => setEditor({ ...editor, nodes: [...editor.nodes, defaultNode("")] })}>添加步骤</button><button className="primary" onClick={() => void savePlan()} disabled={editor.nodes.some((node) => !node.title.trim())}>提交计划</button></footer></section>}
   </section>;
 }

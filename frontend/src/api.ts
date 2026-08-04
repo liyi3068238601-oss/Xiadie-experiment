@@ -1520,7 +1520,16 @@ export async function streamTaskRunEvents(
 }
 export const replaceTaskRunPlan = (
   runId: string,
-  nodes: Array<{ client_id: string; title: string; depends_on?: string[]; completion_criteria?: string }>,
+  nodes: Array<{
+    client_id: string;
+    title: string;
+    depends_on?: string[];
+    completion_criteria?: string;
+    input_refs?: PlanProposalNode["input_refs"];
+    user_locked?: boolean;
+    locked_reason?: "edit" | "explicit" | null;
+    recovery_class?: TaskNode["recovery_class"];
+  }>,
   expectedRevision: number,
   requiresApproval = false,
 ) => j<TaskRun>(`/api/task-runs/${runId}/plan`, {
