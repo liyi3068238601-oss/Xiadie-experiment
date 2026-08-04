@@ -1595,6 +1595,24 @@ export const plannerProposal = (runId: string) =>
   j<PlanProposal>(`/api/task-runs/${encodeURIComponent(runId)}/planner-proposal`, {
     method: "POST", body: JSON.stringify({}),
   });
+export interface TaskRunRecovery {
+  run_id: string;
+  status: TaskRunStatus;
+  recovery_class?: TaskNode["recovery_class"];
+  last_evidence: {
+    tool_name?: string | null;
+    phase?: string | null;
+    status?: string | null;
+    trace_id?: string | null;
+    error_message?: string | null;
+  } | null;
+  retries_used: number;
+  risk: "low" | "mid" | "high" | "none";
+  allowed: { continue: boolean; retry: boolean; replan: boolean };
+  reasons: Record<string, string>;
+}
+export const getTaskRunRecovery = (runId: string) =>
+  j<TaskRunRecovery>(`/api/task-runs/${encodeURIComponent(runId)}/recovery`);
 
 // ---- 模型 / 供应商 ----
 export const listProviders = () => j<Provider[]>("/api/providers");
