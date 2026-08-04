@@ -15,7 +15,7 @@ from . import db, lore
 
 SOURCE_KINDS = frozenset({
     "knowledge_document", "knowledge_chunk", "message", "memory_fragment",
-    "tool_run", "lore_section",
+    "memory_episode", "memory_saga", "memory_entity", "tool_run", "lore_section",
 })
 DERIVED_KINDS = frozenset({
     "retrieval_bundle", "evidence_link", "information_item", "pwm_claim",
@@ -32,6 +32,9 @@ _KNOWLEDGE_POLICIES = frozenset({"remote_allowed", "ask_each_time", "local_only"
 _PRIVACY_SCOPES = {
     "message": frozenset({"private"}),
     "memory_fragment": frozenset({"normal", "sensitive"}),
+    "memory_episode": frozenset({"private"}),
+    "memory_saga": frozenset({"private"}),
+    "memory_entity": frozenset({"private"}),
     "tool_run": frozenset({"private"}),
     "lore_section": frozenset({"public"}),
 }
@@ -176,6 +179,54 @@ def _memory(source_id: str) -> SourceRef:
                      content_hash, status, row["sensitivity"], f"memory://fragments/{source_id}")
 
 
+def _memory_episode(source_id: str) -> SourceRef:
+    conn = db.connect()
+    try:
+        row = conn.execute(
+            "SELECT id,summary,status,updated_at FROM memory_episodes WHERE id=?", (source_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        raise _missing("memory_episode", source_id)
+    digest = f"{row['status']}:{row['updated_at']}:{_canonical_hash(row['summary'])}"
+    return SourceRef("memory_episode", source_id, digest, _sha256(digest),
+                     "active" if row["status"] == "active" else "inaccessible",
+                     "private", f"memory://episodes/{source_id}")
+
+
+def _memory_saga(source_id: str) -> SourceRef:
+    conn = db.connect()
+    try:
+        row = conn.execute(
+            "SELECT id,summary,status,updated_at FROM memory_sagas WHERE id=?", (source_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        raise _missing("memory_saga", source_id)
+    digest = f"{row['status']}:{row['updated_at']}:{_canonical_hash(row['summary'])}"
+    return SourceRef("memory_saga", source_id, digest, _sha256(digest),
+                     "active" if row["status"] in {"active", "completed"} else "inaccessible",
+                     "private", f"memory://sagas/{source_id}")
+
+
+def _memory_entity(source_id: str) -> SourceRef:
+    conn = db.connect()
+    try:
+        row = conn.execute(
+            "SELECT id,name,summary,status,updated_at FROM memory_entities WHERE id=?", (source_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        raise _missing("memory_entity", source_id)
+    digest = f"{row['name']}:{row['updated_at']}:{_canonical_hash(row['summary'])}"
+    return SourceRef("memory_entity", source_id, digest, _sha256(digest),
+                     "active" if row["status"] == "active" else "inaccessible",
+                     "private", f"memory://entities/{source_id}")
+
+
 def _tool_run(source_id: str) -> SourceRef:
     conn = db.connect()
     try:
@@ -231,7 +282,9 @@ class SourceAdapterRegistry:
 registry = SourceAdapterRegistry()
 for _kind, _resolver in {
     "knowledge_document": _document, "knowledge_chunk": _chunk, "message": _message,
-    "memory_fragment": _memory, "tool_run": _tool_run,
+    "memory_fragment": _memory, "memory_episode": _memory_episode,
+    "memory_saga": _memory_saga, "memory_entity": _memory_entity,
+    "tool_run": _tool_run,
     "lore_section": _lore_section,
 }.items():
     registry.register(_kind, _resolver)
