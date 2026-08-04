@@ -4,17 +4,19 @@
 不做多窗口调度、不推倒重写。此文件只负责 HTTP 接口与编排。
 """
 import asyncio
+import base64
 import hashlib
 import json
 import logging
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Literal, Optional
 from urllib.parse import unquote
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from .observability import bind_context, configure_observability, log_event, new_trace_id
@@ -33,8 +35,10 @@ from . import (
     knowledge_embeddings, knowledge_grants,
     knowledge_management, knowledge_parser, knowledge_policy, knowledge_recall, knowledge_recall_service, knowledge_search,
     knowledge_worker, kig_evidence, kig_governance, kig_maintenance, kig_pipeline, kig_sources, llm, lore, memory, memory_conflicts, memory_shadow_proposals,
-    persona, persona_output_guard, persona_v2, runtime_logs, short_memo, task_planner,
-    task_runs, worldbook_r1,
+    artifacts, chat_tool_ingress, confirmation, persona, persona_output_guard, persona_v2,
+    runtime_logs, short_memo,
+    task_planner,
+    task_runs, tool_executor, worldbook_r1,
     saga_consolidator, saga_lifecycle, saga_summary,
     saga_summary_service, secret_store, slow_lifecycle, turn_ingress,
     chat_request_control, image_attachments, vision_capabilities,
@@ -173,6 +177,18 @@ app.add_middleware(
 )
 app.middleware("http")(local_api_guard)
 
+_HTTP_QUIET_PATHS = frozenset({
+    "/api/health",
+})
+_HTTP_POLLING_PATHS = frozenset({
+    "/api/memories",
+    "/api/tasks",
+    "/api/companion-state",
+    "/api/companion-state/events",
+    "/api/archivist/runs",
+    "/api/runtime-logs",
+})
+
 
 @app.middleware("http")
 async def diagnostic_trace_middleware(request: Request, call_next):
@@ -181,9 +197,14 @@ async def diagnostic_trace_middleware(request: Request, call_next):
     trace_id = new_trace_id()
     started = time.monotonic()
     with bind_context(trace_id=trace_id, request_id=request_id or f"req_{db.new_id()}"):
-        quiet = request.url.path == "/api/health" or request.url.path.startswith("/api/diagnostics")
+        quiet = (
+            request.method == "OPTIONS"
+            or request.url.path in _HTTP_QUIET_PATHS
+            or request.url.path.startswith("/api/diagnostics")
+        )
+        polling = request.method == "GET" and request.url.path in _HTTP_POLLING_PATHS
         if not quiet:
-            log_event("http.server", "INFO", "http_request_started", "HTTP request started", fields={
+            log_event("http.server", "DEBUG", "http_request_started", "HTTP request started", fields={
                 "method": request.method, "path": request.url.path,
             })
         try:
@@ -197,7 +218,9 @@ async def diagnostic_trace_middleware(request: Request, call_next):
             raise
         response.headers["X-Xiadie-Trace-Id"] = trace_id
         if not quiet:
-            level = "WARNING" if response.status_code >= 400 else "INFO"
+            level = "WARNING" if response.status_code >= 400 else (
+                "DEBUG" if polling else "INFO"
+            )
             log_event("http.server", level, "http_request_completed", "HTTP request completed", fields={
                 "method": request.method, "path": request.url.path,
                 "status": response.status_code,
@@ -1680,6 +1703,16 @@ async def chat(body: ChatIn) -> StreamingResponse:
                 yield _sse("plan_proposal", proposal)
             except Exception:  # noqa: BLE001 - 规划失败不能破坏已完成回复
                 logger.warning("plan_proposal_failed session_id=%s", body.session_id,
+                               exc_info=True)
+        if not body.regenerate and not temporary_chat:
+            try:
+                tool_result = chat_tool_ingress.run_readonly(
+                    effective_content, workspace=tool_executor.default_workspace(),
+                )
+                if tool_result:
+                    yield _sse("tool_result", tool_result)
+            except Exception:  # noqa: BLE001 - 聊天直调失败不能破坏回复
+                logger.warning("chat_tool_ingress_failed session_id=%s", body.session_id,
                                exc_info=True)
 
     return StreamingResponse(gen(), media_type="text/event-stream")
@@ -3368,6 +3401,8 @@ class TaskPlanNodeIn(BaseModel):
     user_locked: bool = False
     locked_reason: Optional[Literal["edit", "explicit"]] = None
     recovery_class: Optional[Literal["side_effect_free", "idempotent", "side_effectful"]] = None
+    tool_ref: Optional[str] = Field(default=None, max_length=120)
+    tool_args: Optional[dict] = Field(default=None)
 
 
 class PlanProposalIn(BaseModel):
@@ -3375,6 +3410,29 @@ class PlanProposalIn(BaseModel):
     requires_approval: bool = False
     source_session_id: Optional[str] = Field(default=None, max_length=80)
     nodes: list[TaskPlanNodeIn] = Field(min_length=1, max_length=50)
+
+
+class ToolPermissionRequestIn(BaseModel):
+    tool_id: str = Field(min_length=1, max_length=120)
+    target: str = Field(min_length=1, max_length=400)
+    purpose: str = Field(default="", max_length=240)
+    grant_duration_seconds: Optional[int] = Field(default=None, ge=60, le=86400)
+    session_id: Optional[str] = Field(default=None, max_length=80)
+    task_run_id: Optional[str] = None
+    node_id: Optional[str] = None
+
+
+class ToolPermissionDecisionIn(BaseModel):
+    grant_duration_seconds: Optional[int] = Field(default=None, ge=60, le=86400)
+
+
+class ArtifactCreateIn(BaseModel):
+    task_run_id: str = Field(min_length=1, max_length=120)
+    node_id: Optional[str] = None
+    artifact_id: Optional[str] = Field(default=None, max_length=120)
+    artifact_kind: Literal["text", "markdown", "image", "pdf", "data"]
+    mime_type: str = Field(min_length=1, max_length=120)
+    data_b64: str
 
 
 class TaskPlanIn(BaseModel):
@@ -3613,6 +3671,19 @@ def replan_task_run(run_id: str, body: TaskRunRevisionIn) -> dict:
 
 @app.post("/api/task-runs/{run_id}/nodes/{node_id}/action")
 def act_on_task_node(run_id: str, node_id: str, body: TaskNodeActionIn) -> dict:
+    if body.action == "start":
+        run = task_runs.get(run_id)
+        if run is None:
+            raise HTTPException(404, "task_run_not_found")
+        node = next((item for item in run.get("nodes") or [] if item["id"] == node_id), None)
+        if node is None:
+            raise HTTPException(404, "task_node_not_found")
+        try:
+            return tool_executor.execute_node(run, node)
+        except tool_executor.ToolExecutionError as error:
+            raise HTTPException(409, {
+                "code": error.code, "message": str(error), "retry": "modify_then_retry",
+            }) from error
     return _task_run_call(lambda: task_runs.transition_node(
         run_id, node_id, body.action, output_summary=body.output_summary,
         error_code=body.error_code, error_message=body.error_message,
@@ -3687,6 +3758,91 @@ def get_task_run_recovery(run_id: str) -> dict:
     if result is None:
         raise HTTPException(404, "task_run_not_found")
     return result
+
+
+@app.post("/api/tool-permissions/requests")
+def create_tool_permission_request(body: ToolPermissionRequestIn) -> dict:
+    return confirmation.create_request(
+        session_id=body.session_id, tool_id=body.tool_id, target=body.target,
+        purpose=body.purpose, grant_duration_seconds=body.grant_duration_seconds,
+        task_run_id=body.task_run_id, node_id=body.node_id,
+    )
+
+
+@app.get("/api/tool-permissions/requests")
+def list_tool_permission_requests(session_id: Optional[str] = None) -> list[dict]:
+    return confirmation.pending(session_id)
+
+
+@app.post("/api/tool-permissions/requests/{request_id}/confirm")
+def confirm_tool_permission(request_id: str, body: ToolPermissionDecisionIn) -> dict:
+    try:
+        return confirmation.confirm(
+            request_id, grant_duration_seconds=body.grant_duration_seconds,
+        )
+    except KeyError:
+        raise HTTPException(404, "confirmation_request_not_found")
+
+
+@app.post("/api/tool-permissions/requests/{request_id}/deny")
+def deny_tool_permission(request_id: str) -> dict:
+    try:
+        return confirmation.deny(request_id)
+    except KeyError:
+        raise HTTPException(404, "confirmation_request_not_found")
+
+
+@app.get("/api/artifacts")
+def list_artifacts(run_id: str) -> list[dict]:
+    return artifacts.list(run_id)
+
+
+@app.post("/api/artifacts")
+def create_artifact(body: ArtifactCreateIn) -> dict:
+    try:
+        data = base64.b64decode(body.data_b64)
+    except Exception:  # noqa: BLE001 - Base64 解码失败
+        raise HTTPException(422, "data_b64 不是有效 Base64")
+    try:
+        return artifacts.create_version(
+            task_run_id=body.task_run_id, node_id=body.node_id,
+            artifact_id=body.artifact_id or db.new_id(),
+            kind=body.artifact_kind, mime=body.mime_type, data=data,
+            workspace=Path(db.DATA_DIR),
+        )
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+
+
+@app.post("/api/artifacts/{artifact_id}/rollback")
+def rollback_artifact(artifact_id: str) -> dict:
+    try:
+        return artifacts.rollback(artifact_id)
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+
+
+@app.delete("/api/artifacts/{artifact_id}")
+def delete_artifact(artifact_id: str) -> dict:
+    artifacts.soft_delete(artifact_id)
+    return {"ok": True}
+
+
+@app.post("/api/artifacts/{artifact_id}/purge")
+def purge_artifact(artifact_id: str) -> dict:
+    artifacts.purge(artifact_id)
+    return {"ok": True}
+
+
+@app.get("/api/artifacts/{artifact_id}/preview")
+def preview_artifact(artifact_id: str) -> Response:
+    try:
+        data = artifacts.preview(artifact_id)
+    except KeyError:
+        raise HTTPException(404, "artifact_not_found")
+    item = artifacts.active(artifact_id)
+    mime = (item or {}).get("mime_type") or "application/octet-stream"
+    return Response(content=data, media_type=mime)
 
 
 # ---------------------------------------------------------------- 供应商 / 模型

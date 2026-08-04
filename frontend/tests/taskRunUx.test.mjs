@@ -55,3 +55,19 @@ test("CYR.2D chain acceptance keeps trace and evidence visible", () => {
   assert.match(tasks, /run\.id/);
   assert.match(tasks, /recoveryCardVisible/);
 });
+
+test("CYR.3 tool permission api is wired", () => {
+  assert.match(api, /confirmToolPermission/);
+  assert.match(api, /denyToolPermission/);
+  assert.match(api, /listPendingToolPermissions/);
+  assert.match(api, /ToolPermissionRequest/);
+  assert.match(api, /tool-permissions\/requests/);
+});
+
+test("CYR.3 artifact section is wired in the workbench", () => {
+  assert.match(api, /listArtifacts/);
+  assert.match(api, /rollbackArtifact/);
+  assert.match(tasks, /run-artifacts/);
+  assert.match(tasks, /ArtifactViewer/);
+  assert.match(tasks, /artifactKindLabel/);
+});

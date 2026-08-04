@@ -1,6 +1,6 @@
 # CYR.2 TaskRun 执行工作台施工计划
 
-> 状态：CYR.2A～CYR.2D（Planner/锁定/来源/恢复 + 验收与故障加固）已完成并合入 `main`（2026-08-04）；下一批次为 CYR.3 ToolRegistry/权限/Artifact
+> 状态：CYR.2A～CYR.2D 与 CYR.3（ToolRegistry/权限/Artifact/恢复检查点）已完成并合入 `main`（2026-08-04）；下一批次为 PLUG.0～PLUG.4 插件宿主
 > 最后更新：2026-08-04
 > 当前批次设计：[CYR.2B 合同闭合批次设计](superpowers/specs/2026-08-02-cyr2b-contract-closure-design.md)
 > 适用范围：Task、TaskRun、TaskNode、恢复、任务台与执行审计

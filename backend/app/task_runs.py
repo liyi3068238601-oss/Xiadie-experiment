@@ -57,6 +57,10 @@ def _decode_node(row: Any) -> dict[str, Any]:
     item = dict(row)
     item["user_locked"] = bool(item.get("user_locked"))
     try:
+        item["tool_args"] = json.loads(item.pop("tool_args_json") or "{}")
+    except (TypeError, ValueError):
+        item["tool_args"] = {}
+    try:
         item["depends_on"] = json.loads(item.pop("depends_on_json"))
     except (TypeError, ValueError):
         item["depends_on"] = []
@@ -229,11 +233,18 @@ def get(run_id: str) -> dict[str, Any] | None:
         result["artifacts"] = [dict(item) for item in conn.execute(
             "SELECT * FROM task_run_artifact_links WHERE task_run_id=? ORDER BY created_at,id", (run_id,),
         ).fetchall()]
-        result["tool_runs"] = [dict(item) for item in conn.execute(
+        result["tool_runs"] = []
+        for item in conn.execute(
             "SELECT id,trace_id,task_run_id,plugin_id,tool_name,status,phase,error_code,error_type,"
-            "error_message,created_at,updated_at FROM tool_runs WHERE task_run_id=? "
-            "ORDER BY created_at,id", (run_id,),
-        ).fetchall()]
+            "error_message,result_summary_json,created_at,updated_at FROM tool_runs "
+            "WHERE task_run_id=? ORDER BY created_at,id", (run_id,),
+        ).fetchall():
+            decoded = dict(item)
+            try:
+                decoded["result_summary"] = json.loads(decoded.pop("result_summary_json") or "{}")
+            except (TypeError, ValueError):
+                decoded["result_summary"] = {}
+            result["tool_runs"].append(decoded)
         return result
     finally:
         conn.close()
@@ -269,6 +280,15 @@ def _normalize_plan(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
         recovery_class = _text(raw.get("recovery_class"), 30) or None
         if recovery_class is not None and recovery_class not in RECOVERY_CLASSES:
             raise TaskRunConflict("task_plan_node_invalid")
+        tool_ref = _text(raw.get("tool_ref"), 120) or None
+        raw_args = raw.get("tool_args")
+        tool_args: dict[str, Any] = {}
+        if raw_args is not None:
+            if not isinstance(raw_args, dict):
+                raise TaskRunConflict("task_plan_node_invalid")
+            if len(json.dumps(raw_args, ensure_ascii=False)) > 2000:
+                raise TaskRunConflict("task_plan_node_invalid")
+            tool_args = raw_args
         ids.add(client_id)
         prepared.append({
             "client_id": client_id,
@@ -279,6 +299,8 @@ def _normalize_plan(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "user_locked": locked,
             "locked_reason": locked_reason,
             "recovery_class": recovery_class,
+            "tool_ref": tool_ref,
+            "tool_args": tool_args,
         })
     positions = {item["client_id"]: position for position, item in enumerate(prepared)}
     normalized: list[dict[str, Any]] = []
@@ -323,6 +345,8 @@ def _stored_plan(conn, run_id: str) -> list[dict[str, Any]]:
         "user_locked": bool(row["user_locked"]),
         "locked_reason": row["locked_reason"],
         "recovery_class": row["recovery_class"],
+        "tool_ref": row["tool_ref"],
+        "tool_args": json.loads(row["tool_args_json"] or "{}"),
     } for row in rows]
 
 
@@ -452,11 +476,12 @@ def replace_plan(run_id: str, nodes: list[dict[str, Any]], *, expected_revision:
             node_id = f"tnd_{db.new_id()}"
             conn.execute(
                 "INSERT INTO task_nodes(id,task_run_id,client_id,position,title,status,depends_on_json,"
-                "completion_criteria,user_locked,locked_reason,recovery_class,created_at,updated_at) "
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "completion_criteria,user_locked,locked_reason,recovery_class,tool_ref,tool_args_json,"
+                "created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (node_id, run_id, item["client_id"], position, item["title"], "pending",
                  json.dumps(item["depends_on"], ensure_ascii=False), item["completion_criteria"],
-                 int(item["user_locked"]), item["locked_reason"], item["recovery_class"], now, now),
+                 int(item["user_locked"]), item["locked_reason"], item["recovery_class"],
+                 item["tool_ref"], json.dumps(item["tool_args"], ensure_ascii=False), now, now),
             )
             _replace_source_links(conn, run_id, node_id, item["input_refs"])
         target = "awaiting_approval" if requires_approval else "ready"
@@ -904,6 +929,7 @@ def recovery_view(run_id: str) -> dict | None:
         recovery_class, has_terminal_evidence=has_terminal,
         retries_used=_count_retries(run, last),
     )
+    from . import recovery_checkpoint
     return {
         "run_id": run_id,
         "status": run["status"],
@@ -916,6 +942,7 @@ def recovery_view(run_id: str) -> dict | None:
             "error_message": last.get("error_message") if last else None,
         } if last else None,
         "retries_used": _count_retries(run, last),
+        "last_checkpoint": recovery_checkpoint.latest(run_id),
         **advice,
     }
 

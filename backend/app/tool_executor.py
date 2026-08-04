@@ -1,0 +1,152 @@
+"""CYR.3 executor: run task nodes through registered tools with ToolRun evidence."""
+from __future__ import annotations
+
+import json
+import hashlib
+from pathlib import Path
+from typing import Any
+
+from . import task_runs, tool_runs
+from . import recovery_checkpoint
+from .tool_handlers import ToolExecutionError, register_default_tools
+from .tool_registry import ToolRegistry, ToolRegistryError
+
+
+def default_registry() -> ToolRegistry:
+    registry = ToolRegistry()
+    register_default_tools(registry)
+    return registry
+
+
+REGISTRY = default_registry()
+
+
+def default_workspace() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _bounded_result(result: dict[str, Any]) -> dict[str, Any]:
+    encoded = json.dumps(result, ensure_ascii=False, default=str)
+    if len(encoded) <= 8000:
+        return result
+    return {"summary": encoded[:4000] + "…（已截断）"}
+
+
+def _tool_target(manifest, args: dict[str, Any], workspace: Path) -> str:
+    if any(permission.get("kind") == "path_prefix"
+           for permission in manifest.declared_permissions) and isinstance(args.get("path"), str):
+        path = Path(args["path"])
+        if not path.is_absolute():
+            path = Path(workspace) / path
+        return str(path.resolve())
+    return str(args.get("path") or args.get("url") or "")
+
+
+def _checkpoint(run: dict, node: dict, args: dict[str, Any],
+                tool_run: dict) -> None:
+    digest = hashlib.sha256(
+        json.dumps(args, ensure_ascii=False, sort_keys=True).encode(),
+    ).hexdigest()
+    recovery_checkpoint.record(
+        task_run_id=run["id"], node_id=node["id"], tool_run_id=tool_run["id"],
+        input_hash=digest, trace_id=run["trace_id"],
+    )
+
+
+def execute_node(run: dict, node: dict, *, session_id: str | None = None,
+                 workspace: Path | None = None,
+                 registry: ToolRegistry | None = None) -> dict:
+    reg = registry or REGISTRY
+    tool_ref = node.get("tool_ref")
+    if not tool_ref:
+        raise ToolExecutionError("node_has_no_tool", "节点未绑定工具")
+    running = task_runs.transition_node(
+        run["id"], node["id"], "start", expected_revision=run["revision"],
+    )
+    try:
+        manifest = reg.get(tool_ref)
+        args = reg.validate_input(tool_ref, node.get("tool_args") or {})
+    except ToolRegistryError as exc:
+        tool_run = tool_runs.create(tool_name=tool_ref, trace_id=run["trace_id"],
+                                    session_id=session_id, task_run_id=run["id"],
+                                    risk_level="S0")
+        tool_runs.transition(tool_run["id"], "denied", error=exc,
+                             error_code="tool_not_found")
+        return task_runs.transition_node(
+            running["id"], node["id"], "fail", expected_revision=running["revision"],
+            error_code="tool_not_found", error_message="工具未注册或参数无效",
+        )
+    from . import confirmation, permission_guard
+    workspace_root = workspace or default_workspace()
+    target = _tool_target(manifest, args, workspace_root)
+    decision = permission_guard.check(manifest, target=target, session_id=session_id,
+                                      workspace=workspace_root)
+    if decision == "needs_confirmation":
+        confirmation.create_request(
+            session_id=session_id, tool_id=tool_ref, target=target,
+            risk_level=manifest.risk_level, purpose="工具执行需要确认",
+            task_run_id=run["id"], node_id=node["id"],
+        )
+        tool_run = tool_runs.create(
+            tool_name=tool_ref, trace_id=run["trace_id"], session_id=session_id,
+            task_run_id=run["id"], risk_level=manifest.risk_level,
+            arguments_summary=args,
+        )
+        tool_runs.transition(tool_run["id"], "authorizing")
+        return running  # 节点保持 running，等待确认
+    if decision == "denied":
+        tool_run = tool_runs.create(
+            tool_name=tool_ref, trace_id=run["trace_id"], session_id=session_id,
+            task_run_id=run["id"], risk_level=manifest.risk_level,
+            arguments_summary=args,
+        )
+        tool_runs.transition(tool_run["id"], "denied", cancellation_reason="权限被拒绝或已撤销")
+        return task_runs.transition_node(
+            running["id"], node["id"], "fail", expected_revision=running["revision"],
+            error_code="permission_denied", error_message="缺少或已撤销权限",
+        )
+    tool_run = tool_runs.create(
+        tool_name=tool_ref, trace_id=run["trace_id"], session_id=session_id,
+        task_run_id=run["id"], risk_level=manifest.risk_level,
+        arguments_summary=args,
+    )
+    tool_runs.transition(tool_run["id"], "authorizing")
+    tool_runs.transition(tool_run["id"], "running")
+    try:
+        result = reg.handler_for(tool_ref)(args, workspace=workspace_root)
+    except ToolExecutionError as exc:
+        tool_runs.transition(tool_run["id"], "failed", error=exc, error_code=exc.code)
+        _checkpoint(run, node, args, tool_run)
+        return task_runs.transition_node(
+            running["id"], node["id"], "fail", expected_revision=running["revision"],
+            error_code=exc.code, error_message=str(exc),
+        )
+    except Exception:  # noqa: BLE001 - 未知异常走证据失败
+        tool_runs.transition(tool_run["id"], "failed")
+        _checkpoint(run, node, args, tool_run)
+        return task_runs.transition_node(
+            running["id"], node["id"], "fail", expected_revision=running["revision"],
+            error_code="tool_execution_error", error_message="工具执行失败（已脱敏）",
+        )
+    bounded = _bounded_result(result)
+    if manifest.side_effect and result.get("path"):
+        try:
+            from . import artifacts as artifact_store
+            source = workspace_root / result["path"]
+            artifact_store.create_version(
+                task_run_id=run["id"], node_id=node["id"],
+                artifact_id=result["path"], kind="text", mime="text/plain",
+                data=source.read_bytes(), workspace=workspace_root,
+            )
+        except Exception as exc:  # noqa: BLE001 - 工具已成功；产物记录失败留证据日志
+            from .observability import log_event
+            log_event("tool.artifact", "WARNING", "artifact_record_failed",
+                      "artifact record failed",
+                      fields={"tool": tool_ref, "error": str(exc)[:200]})
+    tool_runs.transition(tool_run["id"], "succeeded", result_summary=bounded)
+    _checkpoint(run, node, args, tool_run)
+    summary = str(bounded.get("summary") or bounded)[:500]
+    return task_runs.transition_node(
+        running["id"], node["id"], "succeed", expected_revision=running["revision"],
+        output_summary=summary,
+    )

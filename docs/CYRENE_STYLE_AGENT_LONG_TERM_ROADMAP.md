@@ -183,12 +183,12 @@ LOG.1～LOG.5 已可供实验版日常诊断使用。Windows 打包态只读目�
 
 目标：建立所有工具共享的安全执行底座。
 
-- ToolManifest 声明输入、输出、副作用、风险和所需权限。
-- PermissionGuard 绑定目录、账号、网络目标、期限和用途。
-- ConfirmationRequest 展示将要执行的具体动作。
-- Artifact 统一管理生成文件、预览、版本和删除。
-- ToolRun 记录真实执行证据和退出状态。
-- RecoveryCheckpoint 支持安全重试和回滚。
+- [x] ToolManifest 声明输入、输出、副作用、风险和所需权限。
+- [x] PermissionGuard 绑定目录、账号、网络目标、期限和用途。
+- [x] ConfirmationRequest 展示将要执行的具体动作。
+- [x] Artifact 统一管理生成文件、预览、版本和删除。
+- [x] ToolRun 记录真实执行证据和退出状态。
+- [x] RecoveryCheckpoint 支持安全重试和回滚。
 
 首批工具：工作区文件读取、受限写入、搜索、文本转换、文档解析和本地代码检查。
 
@@ -484,3 +484,7 @@ CYR.2C (Agent Planner + locking + source references + recovery protocol/panel) h
 ## CYR.2D closure record (2026-08-04)
 
 CYR.2D (workbench acceptance and fault hardening) has been merged into `main`. Fault-injection fixed sets cover concurrent command races, mid-transaction crash rollback, database-busy, and stale-revision competition; a process-level E2E kills the backend mid-run and verifies `recovery_required` plus idempotent cancel on restart. Full-chain trace correlation is covered by `test_task_run_chain.py`. The planner quality fixed set ran against deepseek-v4-pro/flash/chat and currently records all as unverified (structural validity of JSON output is the binding gap). Packaged/installer acceptance is deferred to CYR.9; CYR.3 remains responsible for ToolRegistry, grants, and confirmations.
+
+## CYR.3 closure record (2026-08-04)
+
+CYR.3 (ToolRegistry / permissions / artifacts) has been merged into `main`. First-party read-only tools (`workspace.read_file/search/list_dir`, `document.parse`, `code.inspect`) plus `workspace.write_file` run in-process through a unified ToolRun evidence wrapper bound to TaskRun nodes; permission guard grants are scoped, expiring and revocable, with chat confirmation cards; artifacts are versioned (last 10) with audit soft-delete, rollback and preview; recovery checkpoints let the recovery panel retry real executions. Next boundaries: PLUG.0–PLUG.4 plugin host and CYR.4 Web/Research.

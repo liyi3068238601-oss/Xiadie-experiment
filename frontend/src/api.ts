@@ -902,6 +902,8 @@ export interface TaskNode {
   locked_reason?: "edit" | "explicit" | null;
   recovery_class?: "side_effect_free" | "idempotent" | "side_effectful" | null;
   source_links?: TaskSourceLink[];
+  tool_ref?: string | null;
+  tool_args?: Record<string, unknown>;
 }
 export interface TaskRunEvent {
   id: string;
@@ -1613,6 +1615,67 @@ export interface TaskRunRecovery {
 }
 export const getTaskRunRecovery = (runId: string) =>
   j<TaskRunRecovery>(`/api/task-runs/${encodeURIComponent(runId)}/recovery`);
+export interface ToolPermissionRequest {
+  id: string;
+  session_id?: string | null;
+  tool_id: string;
+  target: string;
+  risk_level: string;
+  purpose: string;
+  grant_duration_seconds?: number | null;
+  status: "pending" | "confirmed" | "denied" | "expired";
+  task_run_id?: string | null;
+  node_id?: string | null;
+  created_at: number;
+  decided_at?: number | null;
+  confirmed_grant_id?: string | null;
+}
+export const confirmToolPermission = (requestId: string, grantDurationSeconds?: number) =>
+  j<ToolPermissionRequest>(
+    `/api/tool-permissions/requests/${encodeURIComponent(requestId)}/confirm`,
+    { method: "POST", body: JSON.stringify({ grant_duration_seconds: grantDurationSeconds }) },
+  );
+export const denyToolPermission = (requestId: string) =>
+  j<ToolPermissionRequest>(
+    `/api/tool-permissions/requests/${encodeURIComponent(requestId)}/deny`,
+    { method: "POST", body: JSON.stringify({}) },
+  );
+export const listPendingToolPermissions = (sessionId?: string) => {
+  const query = new URLSearchParams();
+  if (sessionId) query.set("session_id", sessionId);
+  return j<ToolPermissionRequest[]>(`/api/tool-permissions/requests?${query}`);
+};
+export interface ArtifactRecord {
+  id: string;
+  artifact_id: string;
+  task_run_id?: string | null;
+  node_id?: string | null;
+  artifact_kind: "text" | "markdown" | "image" | "pdf" | "data";
+  mime_type: string;
+  size_bytes: number;
+  sha256: string;
+  version: number;
+  status: string;
+  versions?: Array<{ version: number; status: string; size_bytes: number; sha256: string }>;
+  created_at: number;
+  updated_at: number;
+}
+export const listArtifacts = (runId: string) =>
+  j<ArtifactRecord[]>(`/api/artifacts?run_id=${encodeURIComponent(runId)}`);
+export const rollbackArtifact = (artifactId: string) =>
+  j<ArtifactRecord>(`/api/artifacts/${encodeURIComponent(artifactId)}/rollback`, {
+    method: "POST", body: JSON.stringify({}),
+  });
+export const deleteArtifact = (artifactId: string) =>
+  j<{ ok: boolean }>(`/api/artifacts/${encodeURIComponent(artifactId)}`, { method: "DELETE" });
+export const getArtifactPreview = async (artifactId: string): Promise<Blob> => {
+  const response = await fetch(
+    `${API_BASE}/api/artifacts/${encodeURIComponent(artifactId)}/preview`,
+    { headers: requestHeaders() },
+  );
+  if (!response.ok) throw new ApiError(response.status, response.statusText);
+  return response.blob();
+};
 
 // ---- 模型 / 供应商 ----
 export const listProviders = () => j<Provider[]>("/api/providers");
@@ -1872,6 +1935,7 @@ export interface ChatCallbacks {
   }) => void;
   onDelta?: (text: string) => void;
   onPlanProposal?: (proposal: PlanProposal) => void;
+  onToolPermissionRequest?: (request: ToolPermissionRequest) => void;
   onFinal?: (d: {
     message_id: string;
     content: string;

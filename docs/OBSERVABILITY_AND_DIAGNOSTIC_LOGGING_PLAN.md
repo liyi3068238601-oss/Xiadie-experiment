@@ -624,10 +624,10 @@ Xiadie **允许并计划实现**以下内容：
 终端人类格式示例：
 
 ```text
-14:08:21.180 INF kfc.mental     trace=8c31 💭 我想先确认文件是否存在，再给出准确结果
-14:08:21.182 INF feeling.state  trace=8c31 心情=专注 强度=0.42 原因=正在核对文件
-14:08:21.206 ERR tool.file.read trace=8c31 FileNotFoundError: docs/a.md
-14:08:21.211 INF kfc.mental     trace=8c31 💭 路径不存在，我应该说明错误并请她确认位置
+[14:08:21] kfc.mental | INFO | 💭 我想先确认文件是否存在，再给出准确结果 [trace=8c31]
+[14:08:21] feeling.state | INFO | 心情=专注 强度=0.42 原因=正在核对文件 [trace=8c31]
+[14:08:21] tool.file.read | ERROR | FileNotFoundError: docs/a.md [trace=8c31]
+[14:08:21] kfc.mental | INFO | 💭 路径不存在，我应该说明错误并请她确认位置 [trace=8c31]
 ```
 
 展示规则：

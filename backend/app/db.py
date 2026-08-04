@@ -4350,6 +4350,89 @@ MIGRATIONS = [
             ON task_node_source_links(source_kind,source_id,status);
         """,
     ),
+    (
+        89,
+        """
+        -- CYR.3: tool binding, scoped permissions, confirmation, artifacts, recovery.
+        ALTER TABLE task_nodes ADD COLUMN tool_ref TEXT
+            CHECK(tool_ref IS NULL OR length(tool_ref) BETWEEN 1 AND 120);
+        ALTER TABLE task_nodes ADD COLUMN tool_args_json TEXT NOT NULL DEFAULT '{}';
+
+        CREATE TABLE permission_grants (
+            id TEXT PRIMARY KEY,
+            tool_id TEXT NOT NULL CHECK(length(tool_id) BETWEEN 1 AND 120),
+            target_kind TEXT NOT NULL CHECK(target_kind IN ('path_prefix','domain')),
+            target TEXT NOT NULL CHECK(length(target) BETWEEN 1 AND 400),
+            purpose TEXT NOT NULL DEFAULT '' CHECK(length(purpose) <= 240),
+            expires_at REAL,
+            session_id TEXT,
+            created_at REAL NOT NULL,
+            revoked_at REAL,
+            revoked_reason TEXT
+                CHECK(revoked_reason IS NULL OR length(revoked_reason) <= 240)
+        );
+        CREATE INDEX idx_permission_grants_tool
+            ON permission_grants(tool_id,expires_at);
+        CREATE INDEX idx_permission_grants_session
+            ON permission_grants(session_id,created_at);
+
+        CREATE TABLE confirmation_requests (
+            id TEXT PRIMARY KEY,
+            session_id TEXT,
+            tool_id TEXT NOT NULL CHECK(length(tool_id) BETWEEN 1 AND 120),
+            target TEXT NOT NULL CHECK(length(target) BETWEEN 1 AND 400),
+            risk_level TEXT NOT NULL DEFAULT 'S2'
+                CHECK(risk_level IN ('S0','S1','S2','S3','S4')),
+            purpose TEXT NOT NULL DEFAULT '' CHECK(length(purpose) <= 240),
+            grant_duration_seconds INTEGER,
+            status TEXT NOT NULL DEFAULT 'pending'
+                CHECK(status IN ('pending','confirmed','denied','expired')),
+            task_run_id TEXT,
+            node_id TEXT,
+            created_at REAL NOT NULL,
+            decided_at REAL,
+            confirmed_grant_id TEXT
+        );
+        CREATE INDEX idx_confirmation_requests_session
+            ON confirmation_requests(session_id,status,created_at);
+
+        CREATE TABLE artifacts (
+            id TEXT PRIMARY KEY,
+            artifact_id TEXT NOT NULL CHECK(length(artifact_id) BETWEEN 1 AND 120),
+            task_run_id TEXT REFERENCES task_runs(id) ON DELETE CASCADE,
+            node_id TEXT REFERENCES task_nodes(id) ON DELETE SET NULL,
+            artifact_kind TEXT NOT NULL
+                CHECK(artifact_kind IN ('text','markdown','image','pdf','data')),
+            mime_type TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL DEFAULT 0 CHECK(size_bytes >= 0),
+            sha256 TEXT NOT NULL CHECK(length(sha256) = 64),
+            version INTEGER NOT NULL DEFAULT 1 CHECK(version >= 1),
+            status TEXT NOT NULL DEFAULT 'active'
+                CHECK(status IN ('active','soft_deleted','archived')),
+            provenance_json TEXT NOT NULL DEFAULT '{}',
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            purged_at REAL,
+            UNIQUE(artifact_id, version)
+        );
+        CREATE INDEX idx_artifacts_run ON artifacts(task_run_id,created_at,id);
+        CREATE INDEX idx_artifacts_artifact ON artifacts(artifact_id,version);
+        CREATE INDEX idx_artifacts_status ON artifacts(status,updated_at);
+
+        CREATE TABLE recovery_checkpoints (
+            id TEXT PRIMARY KEY,
+            task_run_id TEXT NOT NULL REFERENCES task_runs(id) ON DELETE CASCADE,
+            node_id TEXT REFERENCES task_nodes(id) ON DELETE SET NULL,
+            tool_run_id TEXT REFERENCES tool_runs(id) ON DELETE SET NULL,
+            input_hash TEXT NOT NULL,
+            artifact_before_json TEXT NOT NULL DEFAULT '{}',
+            trace_id TEXT NOT NULL,
+            created_at REAL NOT NULL
+        );
+        CREATE INDEX idx_recovery_checkpoints_run
+            ON recovery_checkpoints(task_run_id,created_at,id);
+        """,
+    ),
 ]
 
 # 默认供应商：全部 OpenAI-Compatible。api_key 开发期存本地库，
