@@ -87,84 +87,79 @@ def _planned_run() -> dict:
     ], expected_revision=run["revision"])
 
 
-def test_concurrent_cancel_race_applies_once_and_zero_writes() -> None:
+class _FaultConnection:
+    """Delegate everything to a real connection, failing on a chosen SQL prefix."""
+
+    def __init__(self, real, fail, exc=RuntimeError):
+        self._real = real
+        self._fail = fail
+        self._exc = exc
+
+    def execute(self, sql, *args, **kwargs):
+        if self._fail(sql):
+            raise self._exc("simulated fault")
+        return self._real.execute(sql, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+def test_concurrent_command_race_applies_once_and_zero_writes() -> None:
     planned = _planned_run()
     run = task_runs.start(planned["id"], expected_revision=planned["revision"])
-    before = _snapshot()
 
-    def cancel_once(_: int) -> str:
+    def act(name: str) -> str:
         try:
-            return task_runs.cancel(run["id"], expected_revision=run["revision"]).get("status", "")
+            return getattr(task_runs, name)(run["id"], expected_revision=run["revision"]).get("status", "")
         except task_runs.TaskRunConflict as exc:
             return exc.code
 
     with ThreadPoolExecutor(max_workers=2) as pool:
-        results = list(pool.map(cancel_once, range(2)))
-    assert results.count("cancelled") == 1
+        results = list(pool.map(act, ["pause", "cancel"]))
     assert results.count("task_run_revision_conflict") == 1
-    after = _snapshot()
-    assert after != before  # 恰好一次应用
-    # 第二次取消幂等：用最新 revision 再取消一次，不产生新写入
+    assert any(status in ("paused", "cancelled") for status in results)
+    # 取消幂等：最新 revision 再取消不产生新写入
     current = task_runs.get(run["id"])
+    if current["status"] != "cancelled":
+        cancelled = task_runs.cancel(run["id"], expected_revision=current["revision"])
+        assert cancelled["status"] == "cancelled"
+        current = task_runs.get(run["id"])
     before2 = _snapshot()
     again = task_runs.cancel(run["id"], expected_revision=current["revision"])
     assert again["status"] == "cancelled"
     assert _snapshot() == before2
 
 
-def test_crash_mid_replace_plan_rolls_back_without_orphans() -> None:
+def test_crash_mid_replace_plan_rolls_back_without_orphans(monkeypatch) -> None:
     run = task_runs.create(task_id=_task(), idempotency_key="fault-crash")
     before = _snapshot()
     original = db.connect
 
-    def exploding_connect():
-        conn = original()
-        original_execute = conn.execute
-
-        def execute(sql, *args, **kwargs):
-            if "INSERT INTO task_nodes" in sql:
-                raise RuntimeError("simulated crash mid-transaction")
-            return original_execute(sql, *args, **kwargs)
-
-        conn.execute = execute
-        return conn
-
-    db.connect = exploding_connect  # type: ignore[assignment]
-    try:
-        with pytest.raises(RuntimeError):
-            task_runs.replace_plan(run["id"], [
-                {"client_id": "a", "title": "A", "depends_on": []},
-            ], expected_revision=run["revision"])
-    finally:
-        db.connect = original
+    monkeypatch.setattr(
+        db, "connect",
+        lambda: _FaultConnection(original(), lambda sql: "INSERT INTO task_nodes" in sql),
+    )
+    with pytest.raises(RuntimeError):
+        task_runs.replace_plan(run["id"], [
+            {"client_id": "a", "title": "A", "depends_on": []},
+        ], expected_revision=run["revision"])
     assert _snapshot() == before  # 完全回滚，无半状态
 
 
-def test_db_busy_does_not_corrupt_data() -> None:
+def test_db_busy_does_not_corrupt_data(monkeypatch) -> None:
     run = task_runs.create(task_id=_task(), idempotency_key="fault-busy")
     before = _snapshot()
     original = db.connect
 
-    def busy_connect():
-        conn = original()
-        original_execute = conn.execute
-
-        def execute(sql, *args, **kwargs):
-            if sql.startswith("BEGIN"):
-                raise sqlite3.OperationalError("database is locked")
-            return original_execute(sql, *args, **kwargs)
-
-        conn.execute = execute
-        return conn
-
-    db.connect = busy_connect  # type: ignore[assignment]
-    try:
-        with pytest.raises(sqlite3.OperationalError):
-            task_runs.replace_plan(run["id"], [
-                {"client_id": "a", "title": "A", "depends_on": []},
-            ], expected_revision=run["revision"])
-    finally:
-        db.connect = original
+    monkeypatch.setattr(
+        db, "connect",
+        lambda: _FaultConnection(original(), lambda sql: sql.startswith("BEGIN"),
+                                 exc=sqlite3.OperationalError),
+    )
+    with pytest.raises(sqlite3.OperationalError):
+        task_runs.replace_plan(run["id"], [
+            {"client_id": "a", "title": "A", "depends_on": []},
+        ], expected_revision=run["revision"])
     assert _snapshot() == before
 
 
