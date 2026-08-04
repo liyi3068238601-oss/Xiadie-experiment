@@ -902,6 +902,8 @@ export interface TaskNode {
   locked_reason?: "edit" | "explicit" | null;
   recovery_class?: "side_effect_free" | "idempotent" | "side_effectful" | null;
   source_links?: TaskSourceLink[];
+  tool_ref?: string | null;
+  tool_args?: Record<string, unknown>;
 }
 export interface TaskRunEvent {
   id: string;

@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 from typing import Any
 
 from . import task_runs, tool_runs
+from . import recovery_checkpoint
 from .tool_handlers import ToolExecutionError, register_default_tools
 from .tool_registry import ToolRegistry, ToolRegistryError
 
@@ -38,6 +40,17 @@ def _tool_target(manifest, args: dict[str, Any], workspace: Path) -> str:
             path = Path(workspace) / path
         return str(path.resolve())
     return str(args.get("path") or args.get("url") or "")
+
+
+def _checkpoint(run: dict, node: dict, args: dict[str, Any],
+                tool_run: dict) -> None:
+    digest = hashlib.sha256(
+        json.dumps(args, ensure_ascii=False, sort_keys=True).encode(),
+    ).hexdigest()
+    recovery_checkpoint.record(
+        task_run_id=run["id"], node_id=node["id"], tool_run_id=tool_run["id"],
+        input_hash=digest, trace_id=run["trace_id"],
+    )
 
 
 def execute_node(run: dict, node: dict, *, session_id: str | None = None,
@@ -103,12 +116,14 @@ def execute_node(run: dict, node: dict, *, session_id: str | None = None,
         result = reg.handler_for(tool_ref)(args, workspace=workspace_root)
     except ToolExecutionError as exc:
         tool_runs.transition(tool_run["id"], "failed", error=exc, error_code=exc.code)
+        _checkpoint(run, node, args, tool_run)
         return task_runs.transition_node(
             running["id"], node["id"], "fail", expected_revision=running["revision"],
             error_code=exc.code, error_message=str(exc),
         )
     except Exception:  # noqa: BLE001 - 未知异常走证据失败
         tool_runs.transition(tool_run["id"], "failed")
+        _checkpoint(run, node, args, tool_run)
         return task_runs.transition_node(
             running["id"], node["id"], "fail", expected_revision=running["revision"],
             error_code="tool_execution_error", error_message="工具执行失败（已脱敏）",
@@ -129,6 +144,7 @@ def execute_node(run: dict, node: dict, *, session_id: str | None = None,
                       "artifact record failed",
                       fields={"tool": tool_ref, "error": str(exc)[:200]})
     tool_runs.transition(tool_run["id"], "succeeded", result_summary=bounded)
+    _checkpoint(run, node, args, tool_run)
     summary = str(bounded.get("summary") or bounded)[:500]
     return task_runs.transition_node(
         running["id"], node["id"], "succeed", expected_revision=running["revision"],

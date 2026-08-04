@@ -929,6 +929,7 @@ def recovery_view(run_id: str) -> dict | None:
         recovery_class, has_terminal_evidence=has_terminal,
         retries_used=_count_retries(run, last),
     )
+    from . import recovery_checkpoint
     return {
         "run_id": run_id,
         "status": run["status"],
@@ -941,6 +942,7 @@ def recovery_view(run_id: str) -> dict | None:
             "error_message": last.get("error_message") if last else None,
         } if last else None,
         "retries_used": _count_retries(run, last),
+        "last_checkpoint": recovery_checkpoint.latest(run_id),
         **advice,
     }
 
