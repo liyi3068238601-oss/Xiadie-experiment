@@ -3484,8 +3484,113 @@ input[type="range"].xd-range::-moz-range-thumb { width: 20px; height: 20px; bord
 .run-banner.invalid strong {
   color: #f0b3bf;
 }
+.run-banner.warn {
+  border-color: rgba(234, 200, 120, 0.32);
+  background: rgba(234, 200, 120, 0.06);
+  border-left: 3px solid var(--warn);
+}
+.run-banner.warn strong {
+  color: #efd9a3;
+}
 .task-plan-node[data-lock="explicit"] {
   border-left-color: var(--violet);
+}
+
+/* CYR.2C 恢复面板（UI 设计 v0.2） */
+.recovery-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 12px 13px;
+  border: 1px solid rgba(157, 132, 255, 0.18);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: rgba(44, 28, 78, 0.5);
+}
+.recovery-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.recovery-card h2 {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #e0dae9;
+}
+.risk-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  font-size: 9px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.risk-pill.low {
+  border-color: rgba(98, 201, 155, 0.3);
+  color: #9fe0bf;
+  background: rgba(98, 201, 155, 0.07);
+}
+.risk-pill.mid {
+  border-color: rgba(234, 200, 120, 0.3);
+  color: #efd9a3;
+  background: rgba(234, 200, 120, 0.07);
+}
+.risk-pill.high {
+  border-color: rgba(233, 135, 154, 0.35);
+  color: #f0b3bf;
+  background: rgba(233, 135, 154, 0.07);
+}
+.risk-pill.none {
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #8f88a0;
+  background: rgba(255, 255, 255, 0.025);
+}
+.recovery-evidence {
+  display: grid;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid rgba(157, 132, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(10, 8, 16, 0.22);
+}
+.evidence-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 9px;
+}
+.evidence-label {
+  width: 42px;
+  flex: 0 0 auto;
+  color: var(--text-faint);
+}
+.recovery-actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.recovery-actions button {
+  padding: 7px 13px;
+  border: 1px solid rgba(187, 177, 221, 0.16);
+  border-radius: 8px;
+  color: #b8afd0;
+  font-size: 10px;
+}
+.recovery-actions .primary {
+  color: #fff;
+  background: linear-gradient(135deg, var(--violet), var(--indigo));
+}
+.recovery-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.empty-copy {
+  color: var(--text-faint);
+  font-size: 10px;
+  line-height: 1.7;
 }
 .context-diagnostic-grid {
   display: grid;

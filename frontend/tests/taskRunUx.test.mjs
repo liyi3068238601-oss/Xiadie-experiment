@@ -40,3 +40,11 @@ test("CYR.2C workbench exposes replan, locks and source chips", () => {
   assert.match(tasks, /lockUiState\(node\)/);
   assert.match(tasks, /run-banner invalid/);
 });
+
+test("CYR.2C recovery panel is wired into the run panel", () => {
+  assert.match(tasks, /recoveryCardVisible\(run\.status\)/);
+  assert.match(tasks, /getTaskRunRecovery/);
+  assert.match(tasks, /recovery-card/);
+  assert.match(tasks, /riskLabel/);
+  assert.match(tasks, /重试（接入工具后可用）/);
+});
