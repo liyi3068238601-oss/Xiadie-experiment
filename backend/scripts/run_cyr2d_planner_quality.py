@@ -4,7 +4,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import db, llm, task_planner, task_runs
 
@@ -61,9 +64,10 @@ async def run_scenario(provider: dict, model: str, scenario: dict) -> dict:
             context="（合成场景，来源仅限 valid_source_ids；没有把握的来源不得引用）",
             locked_nodes=scenario.get("locked_nodes") or [],
         )
-    except llm.LLMError:
+    except llm.LLMError as exc:
         return {"scenario_id": scenario["scenario_id"], "ok": False,
-                "violations": ["structural_invalid"], "reason": "model_unavailable_or_invalid"}
+                "violations": ["structural_invalid"],
+                "reason": exc.code or "planner_response_invalid"}
     return {"scenario_id": scenario["scenario_id"], **assess(proposal, scenario, valid_ids)}
 
 

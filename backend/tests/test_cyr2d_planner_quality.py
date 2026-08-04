@@ -1,6 +1,20 @@
 from __future__ import annotations
 
-from scripts.run_cyr2d_planner_quality import assess, build_report, load_scenarios
+import asyncio
+
+from scripts.run_cyr2d_planner_quality import assess, build_report, load_scenarios, run_scenario
+
+from app import llm
+
+
+def test_run_scenario_records_unparseable_as_planner_response_invalid(monkeypatch) -> None:
+    async def boom(*args, **kwargs):
+        raise llm.LLMError("规划模型输出无法解析", "请调整目标后重试。")
+
+    monkeypatch.setattr("app.task_planner.generate_proposal", boom)
+    result = asyncio.run(run_scenario({"id": "x"}, "model", {"scenario_id": "s1", "goal": "g"}))
+    assert result["reason"] == "planner_response_invalid"
+    assert result["violations"] == ["structural_invalid"]
 
 
 def test_fixture_has_ten_scenarios() -> None:

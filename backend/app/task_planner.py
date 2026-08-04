@@ -100,14 +100,17 @@ async def generate_proposal(*, provider: dict | None, model: str, goal: str,
         raw = parse_proposal_json(response["text"])
     except (ValueError, json.JSONDecodeError) as exc:
         log_event("task.planner", "WARNING", "planner JSON unparseable",
+                  "planner JSON unparseable",
                   fields={"model": model, "error": str(exc)[:200]})
         raise llm.LLMError("规划模型输出无法解析", "请调整目标后重试。") from exc
     proposal, errors = validate_proposal(raw)
     if errors:
         log_event("task.planner", "WARNING", "planner proposal rejected",
+                  "planner proposal rejected",
                   fields={"model": model, "errors": errors[:5]})
         raise llm.LLMError("计划未通过程序校验", "；".join(errors[:5]))
     log_event("task.planner", "INFO", "planner proposal generated",
+              "planner proposal generated",
               fields={"model": model, "node_count": len(proposal["nodes"]),
                       "requires_approval": proposal["requires_approval"]})
     return proposal
