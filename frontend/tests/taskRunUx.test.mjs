@@ -48,3 +48,10 @@ test("CYR.2C recovery panel is wired into the run panel", () => {
   assert.match(tasks, /riskLabel/);
   assert.match(tasks, /重试（接入工具后可用）/);
 });
+
+test("CYR.2D chain acceptance keeps trace and evidence visible", () => {
+  assert.match(tasks, /task-run-progress/);
+  assert.match(tasks, /查看事件/);
+  assert.match(tasks, /run\.id/);
+  assert.match(tasks, /recoveryCardVisible/);
+});

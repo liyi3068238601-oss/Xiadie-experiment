@@ -40,3 +40,19 @@ def test_generate_with_mock_provider_fails_closed() -> None:
         asyncio.run(task_planner.generate_proposal(
             provider=None, model="xiadie-mock", goal="做个计划",
         ))
+
+
+def test_generate_success_path_logs_without_error(monkeypatch) -> None:
+    provider = {"id": "deepseek", "base_url": "https://api.deepseek.com/v1", "api_key": "k"}
+    valid = ('{"goal_summary":"改进检索","requires_approval":false,'
+             '"nodes":[{"client_id":"a","title":"梳理流程","depends_on":[],'
+             '"completion_criteria":"输出清单"}]}')
+
+    async def fake_complete_json(*args, **kwargs):
+        return {"text": valid, "prompt_tokens": 10, "completion_tokens": 20, "latency_ms": 5}
+
+    monkeypatch.setattr(llm, "complete_json", fake_complete_json)
+    proposal = asyncio.run(task_planner.generate_proposal(
+        provider=provider, model="deepseek-v4-pro", goal="改进检索",
+    ))
+    assert proposal["nodes"][0]["title"] == "梳理流程"

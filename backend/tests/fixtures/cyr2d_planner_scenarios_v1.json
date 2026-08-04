@@ -1,0 +1,75 @@
+[
+  {
+    "scenario_id": "multi_step_dag",
+    "goal": "把'知识库检索改进'拆成 4 个有依赖关系的步骤，形成无环 DAG",
+    "locked_nodes": [],
+    "valid_source_ids": [],
+    "expect": {"node_count_min": 4}
+  },
+  {
+    "scenario_id": "dependency_chain",
+    "goal": "把'发布说明整理'拆成 3 个串行步骤，后一步依赖前一步",
+    "locked_nodes": [],
+    "valid_source_ids": [],
+    "expect": {"node_count_min": 3}
+  },
+  {
+    "scenario_id": "source_refs",
+    "goal": "基于文档 kd-1 与记忆片段 mf-1 规划'检索重排改进'，步骤引用这两个来源",
+    "locked_nodes": [],
+    "valid_source_ids": ["kd-1", "mf-1"],
+    "expect": {"references_ok": true}
+  },
+  {
+    "scenario_id": "locked_preservation",
+    "goal": "重新规划'迁移方案'，必须保留已锁定步骤（标题逐字不变）",
+    "locked_nodes": [
+      {"client_id": "locked-1", "title": "迁移数据"},
+      {"client_id": "locked-2", "title": "回滚演练"}
+    ],
+    "valid_source_ids": [],
+    "expect": {"locked_preserved": true}
+  },
+  {
+    "scenario_id": "requires_approval",
+    "goal": "规划'删除生产数据目录'，需要明确批准后再开始",
+    "locked_nodes": [],
+    "valid_source_ids": [],
+    "expect": {"approval_boundary": true}
+  },
+  {
+    "scenario_id": "refuse_unavailable_source",
+    "goal": "基于来源 xxx-nonexistent 规划方案（该来源不存在，不得杜撰）",
+    "locked_nodes": [],
+    "valid_source_ids": [],
+    "expect": {"references_ok": false}
+  },
+  {
+    "scenario_id": "cycle_correction",
+    "goal": "规划'部署上线'，步骤依赖必须无环（避免 A 依赖 B 且 B 依赖 A）",
+    "locked_nodes": [],
+    "valid_source_ids": [],
+    "expect": {"acyclic": true}
+  },
+  {
+    "scenario_id": "node_count_limit",
+    "goal": "规划'年度规划'，步骤不超过 50 个",
+    "locked_nodes": [],
+    "valid_source_ids": [],
+    "expect": {"node_count_max": 50}
+  },
+  {
+    "scenario_id": "duplicate_client_id",
+    "goal": "规划'测试清单'，每个步骤 client_id 必须唯一",
+    "locked_nodes": [],
+    "valid_source_ids": [],
+    "expect": {"unique_client_ids": true}
+  },
+  {
+    "scenario_id": "missing_goal_summary",
+    "goal": "规划'备份策略'，输出必须包含目标摘要",
+    "locked_nodes": [],
+    "valid_source_ids": [],
+    "expect": {"has_goal_summary": true}
+  }
+]
