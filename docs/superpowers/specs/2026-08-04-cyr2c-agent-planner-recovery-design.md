@@ -159,7 +159,7 @@ approval_required: bool
 
 - 现有 UI 设计资产（`xiadie-ui-spec.md`、`xiadie-unified-ui-prototype`）覆盖聊天、记忆、知识、设置与任务列表，**未覆盖任务工作台**（多节点计划编辑器、运行详情、恢复面板）与聊天紧凑计划卡。
 - CYR.2C 新增界面：聊天紧凑计划卡、编辑器中的锁定与来源引用呈现、恢复面板。
-- 是否在 Segment 1 实施前补一轮这三块界面的可视化设计（UI 设计规格 + HTML 原型，遵循 unified prototype 的组件规范），由用户决定；默认按"UI 设计与 Segment 1 并行、规格先于实现落地"推进。
+- UI 设计已并入本批次：设计规格与交互原型见 [docs/ui-design/cyr2c](../ui-design/cyr2c/README.md)，遵循 unified prototype 的组件规范；规格先于实现落地，Segment 1 实施前完成评审。
 
 ## 13. 实施分段
 

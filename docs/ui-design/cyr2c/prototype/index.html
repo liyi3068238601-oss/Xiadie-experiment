@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>遐蝶 CYR.2C 任务工作台 UI 原型</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <svg class="svg-defs" aria-hidden="true">
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 5h14v11H9l-4 3V5Z"/><path d="M8 9h8M8 12h5"/></symbol>
+    <symbol id="i-task" viewBox="0 0 24 24"><path d="m4 6 1.5 1.5L8 5M11 6h9M4 12l1.5 1.5L8 11M11 12h9M4 18l1.5 1.5L8 17M11 18h9"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.4 2.9 8.4 7 10 4.1-1.6 7-5.6 7-10V6l-7-3Z"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/><circle cx="12" cy="15" r="1"/></symbol>
+    <symbol id="i-unlock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 7.7-1.6"/><circle cx="12" cy="15" r="1"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6V3Z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></symbol>
+    <symbol id="i-memory" viewBox="0 0 24 24"><path d="M9 4.5a3 3 0 0 0-5 2.2 3.5 3.5 0 0 0 .7 6.8A3 3 0 0 0 9 17.8V4.5ZM15 4.5a3 3 0 0 1 5 2.2 3.5 3.5 0 0 1-.7 6.8A3 3 0 0 1 15 17.8V4.5Z"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 3 19h18L12 4Z"/><path d="M12 10v4M12 17h.01"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M9 15 15 9"/><path d="M11 6.5 13 4.5a3.5 3.5 0 0 1 5 5l-2 2"/><path d="M13 17.5 11 19.5a3.5 3.5 0 0 1-5-5l2-2"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></symbol>
+  </svg>
+
+  <header class="prototype-toolbar">
+    <div><strong>遐蝶 CYR.2C 任务工作台</strong><span>独立设计原型 · 不影响产品代码</span></div>
+    <div class="viewport-switch" role="group" aria-label="预览尺寸">
+      <button class="active" data-viewport="desktop">桌面</button>
+      <button data-viewport="mobile">移动</button>
+    </div>
+  </header>
+
+  <main class="prototype-canvas">
+    <div class="app-window" data-viewport="desktop">
+      <header class="topbar">
+        <div class="brand-mark" aria-label="遐蝶"><span class="butterfly" aria-hidden="true">◇</span></div>
+        <div class="topbar-spacer"></div>
+        <div class="model-state"><i></i><span>DeepSeek · planner</span></div>
+        <div class="window-actions"><button>—</button><button>□</button><button>×</button></div>
+      </header>
+
+      <div class="app-body">
+        <aside class="sidebar">
+          <nav class="main-nav" aria-label="原型导航">
+            <button class="active" data-view="chat"><svg><use href="#i-chat"/></svg><span>聊天计划卡</span></button>
+            <button data-view="workbench"><svg><use href="#i-task"/></svg><span>任务工作台</span></button>
+            <button data-view="recovery"><svg><use href="#i-shield"/></svg><span>恢复面板</span></button>
+          </nav>
+          <div class="sidebar-section-label">本原型覆盖</div>
+          <div class="recent-list">
+            <button class="selected"><span>聊天紧凑计划卡</span><small>3 态</small></button>
+            <button data-view="workbench"><span>编辑器锁定与来源</span><small>5 态</small></button>
+            <button data-view="recovery"><span>恢复建议矩阵</span><small>4 态</small></button>
+          </div>
+          <div class="sidebar-footer"><span class="online-dot"></span><div><strong>设计 v0.1</strong><small>沿用 unified prototype</small></div></div>
+        </aside>
+
+        <section class="content-shell">
+          <!-- 聊天计划卡 -->
+          <div class="screen active" id="screen-chat">
+            <div class="chat-thread">
+              <div class="msg user"><div class="bubble">帮我梳理知识库的检索流程，写一份改进方案，拆成步骤</div></div>
+              <div class="msg ai">
+                <div class="avatar">◇</div>
+                <div class="bubble">
+                  <p>好，我先把它拆成一个可执行的计划。你先看一眼步骤和依赖，确认后我再建任务草稿。</p>
+                </div>
+              </div>
+              <div class="msg ai">
+                <div class="avatar">◇</div>
+                <div class="plan-card" data-state="pending" id="plan-card">
+                  <div class="plan-head">
+                    <span class="eyebrow">候选计划</span>
+                    <span class="status-pill" id="plan-status-pill">待确认</span>
+                  </div>
+                  <p class="plan-goal">梳理知识库检索流程并输出改进方案</p>
+                  <div class="plan-stats">
+                    <span><b id="stat-steps">4</b> 步骤</span>
+                    <span><b id="stat-deps">2</b> 依赖</span>
+                    <span><b id="stat-sources">3</b> 来源</span>
+                    <span class="approval" id="stat-approval">需批准</span>
+                  </div>
+                  <ol class="plan-nodes" id="plan-nodes">
+                    <li><span class="node-idx">1</span><div><strong>梳理现有检索流程</strong><small>列出 FTS 与 dense 召回路径</small></div></li>
+                    <li><span class="node-idx">2</span><div><strong>定位失败点</strong><small class="dep">← 依赖 1</small><small>从日志与评估数据找召回缺口</small></div></li>
+                    <li><span class="node-idx">3</span><div><strong>设计改进方案</strong><small class="dep">← 依赖 2</small><small>重排与引用白名单调整</small></div></li>
+                  </ol>
+                  <button class="more-nodes" id="more-nodes">+1 更多</button>
+                  <div class="plan-actions">
+                    <button class="primary" id="plan-enter">进入工作台编辑</button>
+                    <button class="ghost" id="plan-cancel">取消</button>
+                  </div>
+                  <p class="plan-note">确认后创建任务草稿，不会自动开始执行</p>
+                </div>
+              </div>
+              <div class="plan-state-switch" role="group" aria-label="计划卡状态演示">
+                <span>演示状态：</span>
+                <button data-plan-state="loading">生成中</button>
+                <button class="active" data-plan-state="pending">待确认</button>
+                <button data-plan-state="editing">已进入编辑</button>
+                <button data-plan-state="failed">生成失败</button>
+                <button data-plan-state="cancelled">已取消</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 任务工作台 -->
+          <div class="screen page-screen" id="screen-workbench">
+            <header class="page-header">
+              <div><p class="eyebrow">RUN DETAIL</p><h1>梳理知识库检索流程</h1><p>运行 #r-1042 · 4 步骤 · 3 来源</p></div>
+              <div class="header-actions">
+                <span class="status-pill run-running">待批准</span>
+                <button class="ghost" id="wb-edit-plan">编辑计划</button>
+                <button class="secondary" id="wb-replan">重新生成计划</button>
+              </div>
+            </header>
+
+            <div class="run-banner invalid" id="invalid-banner" hidden>
+              <svg><use href="#i-alert"/></svg>
+              <div><strong>有节点引用已失效，无法开始执行</strong><p>请移除失效引用，或重新生成计划。</p></div>
+              <button class="ghost" id="invalid-focus">处理失效引用</button>
+            </div>
+
+            <div class="editor-head">
+              <span class="eyebrow">PLAN</span>
+              <span class="muted">保存前修改不会生效 · 批准只批准当前计划</span>
+            </div>
+
+            <div class="node-list" id="node-list">
+              <article class="node-card" data-lock="explicit">
+                <header>
+                  <span class="node-idx">1</span>
+                  <strong>梳理现有检索流程</strong>
+                  <span class="status-pill lock-pill">已锁定</span>
+                  <button class="lock-btn" data-lock-action="unlock" aria-label="解锁节点"><svg><use href="#i-lock"/></svg></button>
+                  <button class="more" aria-label="更多"><svg><use href="#i-more"/></svg></button>
+                </header>
+                <p class="acceptance">验收：输出 FTS 与 dense 双路径清单及调用关系</p>
+                <footer class="source-row">
+                  <span class="source-chip memory" title="记忆片段：知识库索引结构（有界摘要）"><svg><use href="#i-memory"/></svg>记忆片段</span>
+                  <span class="source-chip knowledge" title="知识：检索与重排设计（有界摘要）"><svg><use href="#i-doc"/></svg>知识 · 检索设计</span>
+                </footer>
+              </article>
+
+              <article class="node-card" data-lock="edit">
+                <header>
+                  <span class="node-idx">2</span>
+                  <strong>定位失败点</strong>
+                  <span class="status-pill lock-pill">已锁定 · 编辑</span>
+                  <button class="lock-btn" data-lock-action="unlock" aria-label="解锁节点"><svg><use href="#i-lock"/></svg></button>
+                  <button class="more" aria-label="更多"><svg><use href="#i-more"/></svg></button>
+                </header>
+                <p class="acceptance">验收：列出 ≥3 个可复现的召回缺口并附证据</p>
+                <footer class="source-row">
+                  <span class="source-chip memory" title="记忆片段：上周检索评估（有界摘要）"><svg><use href="#i-memory"/></svg>记忆片段</span>
+                  <span class="source-chip conversation" title="对话：今天 14:02 关于召回缺口的讨论"><svg><use href="#i-chat"/></svg>对话 · 今天 14:02</span>
+                  <span class="source-chip invalid" title="失效原因：来源文档已删除"><svg><use href="#i-alert"/></svg>来源已失效</span>
+                </footer>
+              </article>
+
+              <article class="node-card" data-lock="none">
+                <header>
+                  <span class="node-idx">3</span>
+                  <strong>设计改进方案</strong>
+                  <span class="status-pill dep-pill">依赖 2</span>
+                  <button class="lock-btn" data-lock-action="lock" aria-label="锁定节点"><svg><use href="#i-unlock"/></svg></button>
+                  <button class="more" aria-label="更多"><svg><use href="#i-more"/></svg></button>
+                </header>
+                <p class="acceptance">验收：改进点可落库并可回滚</p>
+                <footer class="source-row">
+                  <span class="source-chip knowledge" title="知识：重排与引用白名单（有界摘要）"><svg><use href="#i-doc"/></svg>知识 · 重排</span>
+                </footer>
+              </article>
+            </div>
+
+            <div class="wb-state-switch" role="group" aria-label="工作台状态演示">
+              <span>演示：</span>
+              <button class="active" data-wb-state="normal">正常</button>
+              <button data-wb-state="replanning">生成中</button>
+              <button data-wb-state="replan-failed">生成失败</button>
+              <button data-wb-state="invalid">失效引用</button>
+            </div>
+
+            <div class="modal-backdrop" id="replan-modal" hidden>
+              <div class="modal" role="dialog" aria-modal="true" aria-labelledby="replan-title">
+                <header><div><strong id="replan-title">重新生成计划</strong><small>会保留已锁定节点</small></div><button class="icon-button" id="modal-close" aria-label="关闭"><svg><use href="#i-close"/></svg></button></header>
+                <p class="modal-copy">重新生成会保留 <b>2</b> 个已锁定节点；未锁定节点可能被改写，生成结果仍可修改，确认后才替换当前计划。</p>
+                <div class="modal-actions"><button class="ghost" id="modal-cancel">取消</button><button class="primary" id="modal-confirm">生成候选计划</button></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 恢复面板 -->
+          <div class="screen page-screen" id="screen-recovery">
+            <header class="page-header">
+              <div><p class="eyebrow">RECOVERY</p><h1>运行恢复</h1><p>r-1008 · 生成改进方案 · 已暂停</p></div>
+              <div class="header-actions"><span class="status-pill warn-pill" id="recovery-state-pill">paused</span></div>
+            </header>
+
+            <div class="run-banner warn" id="interrupted-banner">
+              <svg><use href="#i-alert"/></svg>
+              <div><strong>应用中断，任务已进入保护状态，不会自动继续</strong><p>你可以选择继续、重试或重新规划。</p></div>
+            </div>
+
+            <article class="recovery-card" id="recovery-card">
+              <header>
+                <div><span class="eyebrow">恢复建议</span><h2 id="recovery-title">基于最后一次工具证据</h2></div>
+                <span class="risk-pill" id="recovery-risk">风险 · 中</span>
+              </header>
+              <div class="evidence" id="recovery-evidence">
+                <div class="evidence-row"><span class="evidence-label">工具</span><strong>search_workspace</strong></div>
+                <div class="evidence-row"><span class="evidence-label">阶段</span><span>executing · interrupted</span></div>
+                <div class="evidence-row"><span class="evidence-label">trace</span><code>ab12cd34…</code><button class="copy-btn" aria-label="复制 trace id"><svg><use href="#i-copy"/></svg></button></div>
+                <div class="evidence-row"><span class="evidence-label">错误</span><span class="redacted">连接中断（已脱敏）</span></div>
+              </div>
+              <div class="recovery-actions" id="recovery-actions">
+                <button class="primary" id="act-continue">继续</button>
+                <button class="secondary" id="act-retry">重试（还剩 2 次）</button>
+                <button class="ghost" id="act-replan">重新规划</button>
+              </div>
+            </article>
+
+            <div class="recovery-state-switch" role="group" aria-label="恢复面板状态演示">
+              <span>演示语义：</span>
+              <button class="active" data-rec-state="idempotent">幂等 · 中</button>
+              <button data-rec-state="free">无副作用 · 低</button>
+              <button data-rec-state="effectful">有副作用 · 高</button>
+              <button data-rec-state="no-evidence">无证据 · fail closed</button>
+              <button data-rec-state="empty">空态</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
