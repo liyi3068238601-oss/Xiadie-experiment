@@ -1,4 +1,5 @@
 import json
+import io
 import zipfile
 
 import pytest
@@ -10,6 +11,7 @@ from app.observability import bind_context, log_event
 from app.observability import api as diagnostic_api
 from app.observability.buffer import DiagnosticBuffer, BUFFER
 from app.observability.redaction import redact
+from app.observability.sinks import HumanConsoleSink
 
 CLIENT = TestClient(
     app, headers={"X-Xiadie-Token": "test-token-with-at-least-thirty-two-bytes"},
@@ -197,3 +199,32 @@ def test_filtered_log_query_scans_beyond_the_oldest_response_page(monkeypatch):
     response = CLIENT.get("/api/diagnostics/logs", params={"search": "needle", "limit": 10})
     assert response.status_code == 200
     assert [item["event_id"] for item in response.json()["items"]] == ["newest-error"]
+
+
+def test_human_console_sink_renders_mofox_style_lines():
+    sink = HumanConsoleSink(min_level="INFO")
+    sink.stream = io.StringIO()
+    sink.color = True
+    sink.emit({
+        "level": "INFO",
+        "timestamp": "2026-08-04T13:46:01.123+08:00",
+        "logger": "kfc.mental",
+        "message": "hello",
+        "trace_id": "abc12345",
+    })
+    colored = sink.stream.getvalue()
+    assert colored.startswith("\x1b[2m[13:46:01]\x1b[0m ")
+    assert "kfc.mental" in colored
+    assert "\x1b[32mINFO\x1b[0m" in colored
+    assert "\x1b[2m | \x1b[0m" in colored
+    assert "\x1b[2m [trace=abc12345]\x1b[0m" in colored
+
+    sink.color = False
+    sink.emit({
+        "level": "WARNING",
+        "timestamp": "2026-08-04T13:46:02.456+08:00",
+        "logger": "tool.file",
+        "message": "slow",
+    })
+    plain = sink.stream.getvalue().splitlines()[-1]
+    assert plain == "[13:46:02] tool.file | WARNING | slow"
