@@ -43,6 +43,64 @@ def _running_run() -> dict:
     return task_runs.start(planned["id"], expected_revision=planned["revision"])
 
 
+def _doc_source() -> str:
+    conn = db.connect()
+    try:
+        now = db.now()
+        conn.execute(
+            "INSERT INTO knowledge_documents("
+            "id,collection_id,source_type,original_name,extension,mime_type,size_bytes,"
+            "content_sha256,storage_key,status,sensitivity,embedding_mode,transmission_policy,"
+            "policy_revision,governance_status,active_index_revision,index_version,indexed_at,"
+            "created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("kd-1", "default", "file", "检索设计.txt", "txt", "text/plain", 100,
+             "a" * 64, "storage/kd-1", "indexed", "normal", "none", "local_only",
+             1, "active", 1, "index-v1", now, now, now),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return "kd-1"
+
+
+def _with_refs(run: dict) -> dict:
+    return task_runs.replace_plan(run["id"], [
+        {"client_id": "step-a", "title": "梳理流程", "input_refs": [
+            {"source_kind": "knowledge_source", "source_id": _doc_source()},
+        ]},
+    ], expected_revision=run["revision"])
+
+
+def test_replace_plan_writes_source_links_and_locks() -> None:
+    run = task_runs.create(task_id=_task(), idempotency_key="src-1")
+    saved = _with_refs(run)
+    node = saved["nodes"][0]
+    assert node["source_links"][0]["source_kind"] == "knowledge_source"
+    assert node["source_links"][0]["status"] == "active"
+    assert node["user_locked"] is False
+
+
+def test_locked_node_preservation_enforced() -> None:
+    run = task_runs.create(task_id=_task(), idempotency_key="lock-1")
+    saved = task_runs.replace_plan(run["id"], [
+        {"client_id": "a", "title": "第一步", "user_locked": True, "locked_reason": "explicit"},
+    ], expected_revision=run["revision"])
+    with pytest.raises(task_runs.TaskRunConflict) as exc:
+        task_runs.replace_plan(run["id"], [
+            {"client_id": "a", "title": "被改写"},
+        ], expected_revision=saved["revision"])
+    assert exc.value.code == "task_plan_locked_node_modified"
+
+
+def test_invalidated_source_blocks_start() -> None:
+    run = task_runs.create(task_id=_task(), idempotency_key="src-2")
+    saved = _with_refs(run)
+    assert task_runs.invalidate_source_links("knowledge_source", "kd-1", "文档已删除") == 1
+    with pytest.raises(task_runs.TaskRunConflict) as exc:
+        task_runs.start(saved["id"], expected_revision=saved["revision"])
+    assert exc.value.code == "task_source_invalidated"
+
+
 BUSINESS_TABLES = (
     "tasks", "task_runs", "task_nodes", "task_run_events", "task_run_artifact_links",
 )
