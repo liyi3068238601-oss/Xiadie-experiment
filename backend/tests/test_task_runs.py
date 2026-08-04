@@ -147,6 +147,21 @@ def test_http_planner_proposal_mock_fails_closed() -> None:
     assert response.status_code == 422
 
 
+def test_delete_hooks_invalidate_links() -> None:
+    from app import knowledge_management as km
+    run = task_runs.create(task_id=_task(), idempotency_key="hook-1")
+    _with_refs(run)  # 使用 knowledge_source kd-1
+    assert km.set_archived("kd-1", archived=True) is not None
+    conn = db.connect()
+    try:
+        status = conn.execute(
+            "SELECT status FROM task_node_source_links WHERE source_id='kd-1'",
+        ).fetchone()["status"]
+    finally:
+        conn.close()
+    assert status == "invalidated"
+
+
 BUSINESS_TABLES = (
     "tasks", "task_runs", "task_nodes", "task_run_events", "task_run_artifact_links",
 )

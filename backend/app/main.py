@@ -3056,7 +3056,7 @@ class EpisodeLifecycleIn(BaseModel):
 @app.post("/api/episodes/{episode_id}/lifecycle")
 def transition_episode_lifecycle(episode_id: str, body: EpisodeLifecycleIn) -> dict:
     try:
-        return slow_lifecycle.transition_episode(
+        episode = slow_lifecycle.transition_episode(
             episode_id, body.target_status, trigger="user", reason=body.reason,
             expected_revision=body.expected_revision,
         )
@@ -3065,6 +3065,12 @@ def transition_episode_lifecycle(episode_id: str, body: EpisodeLifecycleIn) -> d
             409 if error.code == "revision_conflict" else 400
         )
         raise HTTPException(status, str(error)) from error
+    if episode is None:
+        raise HTTPException(404, "Episode 不存在")
+    if body.target_status in {"archived", "tombstone"}:
+        task_runs.invalidate_source_links("memory_episode", episode_id,
+                                          f"Episode 已{body.target_status}")
+    return episode
 
 
 # ---------------------------------------------------------------- Saga
@@ -3203,6 +3209,9 @@ def transition_saga(saga_id: str, body: SagaLifecycleIn) -> dict:
         raise HTTPException(status, str(error)) from error
     if not saga:
         raise HTTPException(404, "Saga 不存在")
+    if body.target_status in {"archived", "tombstone"}:
+        task_runs.invalidate_source_links("memory_saga", saga_id,
+                                          f"Saga 已{body.target_status}")
     return saga
 
 
