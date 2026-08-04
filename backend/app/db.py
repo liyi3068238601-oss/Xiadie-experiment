@@ -4318,6 +4318,38 @@ MIGRATIONS = [
             CHECK(skip_reason_summary IS NULL OR length(skip_reason_summary) <= 240);
         """,
     ),
+    (
+        88,
+        """
+        -- CYR.2C: node lock semantics, recovery class, and source reference links.
+        ALTER TABLE task_nodes ADD COLUMN user_locked INTEGER NOT NULL DEFAULT 0
+            CHECK(user_locked IN (0,1));
+        ALTER TABLE task_nodes ADD COLUMN locked_reason TEXT
+            CHECK(locked_reason IS NULL OR locked_reason IN ('edit','explicit'));
+        ALTER TABLE task_nodes ADD COLUMN recovery_class TEXT
+            CHECK(recovery_class IS NULL OR recovery_class IN
+                  ('side_effect_free','idempotent','side_effectful'));
+        CREATE TABLE task_node_source_links (
+            id TEXT PRIMARY KEY,
+            task_run_id TEXT NOT NULL REFERENCES task_runs(id) ON DELETE CASCADE,
+            node_id TEXT NOT NULL REFERENCES task_nodes(id) ON DELETE CASCADE,
+            source_kind TEXT NOT NULL CHECK(source_kind IN (
+                'memory_fragment','memory_episode','memory_saga','memory_entity',
+                'knowledge_source','conversation'
+            )),
+            source_id TEXT NOT NULL CHECK(length(source_id) BETWEEN 1 AND 200),
+            summary TEXT NOT NULL DEFAULT '' CHECK(length(summary) <= 240),
+            status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','invalidated')),
+            invalidated_at REAL,
+            invalidated_reason TEXT CHECK(invalidated_reason IS NULL OR length(invalidated_reason) <= 240),
+            created_at REAL NOT NULL
+        );
+        CREATE INDEX idx_task_source_links_run
+            ON task_node_source_links(task_run_id,node_id,id);
+        CREATE INDEX idx_task_source_links_source
+            ON task_node_source_links(source_kind,source_id,status);
+        """,
+    ),
 ]
 
 # 默认供应商：全部 OpenAI-Compatible。api_key 开发期存本地库，

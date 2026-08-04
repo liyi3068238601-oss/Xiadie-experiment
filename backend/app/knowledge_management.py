@@ -5,7 +5,7 @@ import json
 import re
 from pathlib import Path
 
-from . import db, knowledge, knowledge_embeddings, knowledge_search
+from . import db, knowledge, knowledge_embeddings, knowledge_search, task_runs
 
 MAX_TAGS = 10
 MAX_TAG_CHARS = 40
@@ -88,6 +88,8 @@ def set_archived(document_id: str, *, archived: bool) -> dict | None:
             (status, now if archived else None, now, document_id),
         )
         conn.commit()
+        if archived:
+            task_runs.invalidate_source_links("knowledge_source", document_id, "文档已归档")
         updated = conn.execute("SELECT * FROM knowledge_documents WHERE id=?", (document_id,)).fetchone()
         return knowledge.public_document(dict(updated))
     finally:
@@ -442,6 +444,7 @@ def _delete_claimed(run: dict) -> None:
     _unlink_strict(knowledge.storage_path_for(dict(row)))
     if row["artifact_key"]:
         _unlink_strict(_artifact_path(row["artifact_key"]))
+    task_runs.invalidate_source_links("knowledge_source", run["document_id"], "文档已删除")
 
     conn = db.connect()
     try:

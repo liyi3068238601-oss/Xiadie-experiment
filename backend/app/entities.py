@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import re
 
-from . import db
+from . import db, task_runs
 
 ENTITY_TYPES = {
     "person", "pet", "organization", "place", "event", "project", "work",
@@ -160,6 +160,7 @@ def archive_entity(eid: str) -> bool:
             {**after, "unlinked_fragment_ids": [row["fragment_id"] for row in linked]}, "user",
         )
         conn.commit()
+        task_runs.invalidate_source_links("memory_entity", eid, "实体已归档")
         return True
     finally:
         conn.close()

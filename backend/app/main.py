@@ -33,7 +33,8 @@ from . import (
     knowledge_embeddings, knowledge_grants,
     knowledge_management, knowledge_parser, knowledge_policy, knowledge_recall, knowledge_recall_service, knowledge_search,
     knowledge_worker, kig_evidence, kig_governance, kig_maintenance, kig_pipeline, kig_sources, llm, lore, memory, memory_conflicts, memory_shadow_proposals,
-    persona, persona_output_guard, persona_v2, runtime_logs, short_memo, task_runs, worldbook_r1,
+    persona, persona_output_guard, persona_v2, runtime_logs, short_memo, task_planner,
+    task_runs, worldbook_r1,
     saga_consolidator, saga_lifecycle, saga_summary,
     saga_summary_service, secret_store, slow_lifecycle, turn_ingress,
     chat_request_control, image_attachments, vision_capabilities,
@@ -1665,6 +1666,21 @@ async def chat(body: ChatIn) -> StreamingResponse:
                 **final_payload,
             },
         )
+        if (
+            not body.regenerate
+            and not temporary_chat
+            and provider is not None
+            and provider.get("id") != "mock"
+            and task_planner.matches_planning_intent(effective_content)
+        ):
+            try:
+                proposal = await task_planner.generate_proposal(
+                    provider=provider, model=model, goal=effective_content[:200],
+                )
+                yield _sse("plan_proposal", proposal)
+            except Exception:  # noqa: BLE001 - 规划失败不能破坏已完成回复
+                logger.warning("plan_proposal_failed session_id=%s", body.session_id,
+                               exc_info=True)
 
     return StreamingResponse(gen(), media_type="text/event-stream")
 
@@ -3040,7 +3056,7 @@ class EpisodeLifecycleIn(BaseModel):
 @app.post("/api/episodes/{episode_id}/lifecycle")
 def transition_episode_lifecycle(episode_id: str, body: EpisodeLifecycleIn) -> dict:
     try:
-        return slow_lifecycle.transition_episode(
+        episode = slow_lifecycle.transition_episode(
             episode_id, body.target_status, trigger="user", reason=body.reason,
             expected_revision=body.expected_revision,
         )
@@ -3049,6 +3065,12 @@ def transition_episode_lifecycle(episode_id: str, body: EpisodeLifecycleIn) -> d
             409 if error.code == "revision_conflict" else 400
         )
         raise HTTPException(status, str(error)) from error
+    if episode is None:
+        raise HTTPException(404, "Episode 不存在")
+    if body.target_status in {"archived", "tombstone"}:
+        task_runs.invalidate_source_links("memory_episode", episode_id,
+                                          f"Episode 已{body.target_status}")
+    return episode
 
 
 # ---------------------------------------------------------------- Saga
@@ -3187,6 +3209,9 @@ def transition_saga(saga_id: str, body: SagaLifecycleIn) -> dict:
         raise HTTPException(status, str(error)) from error
     if not saga:
         raise HTTPException(404, "Saga 不存在")
+    if body.target_status in {"archived", "tombstone"}:
+        task_runs.invalidate_source_links("memory_saga", saga_id,
+                                          f"Saga 已{body.target_status}")
     return saga
 
 
@@ -3328,11 +3353,28 @@ class TaskRunIn(BaseModel):
     idempotency_key: Optional[str] = Field(default=None, max_length=120)
 
 
+class TaskSourceRefIn(BaseModel):
+    source_kind: Literal["memory_fragment", "memory_episode", "memory_saga",
+                         "memory_entity", "knowledge_source", "conversation"]
+    source_id: str = Field(min_length=1, max_length=200)
+
+
 class TaskPlanNodeIn(BaseModel):
     client_id: str = Field(min_length=1, max_length=80)
     title: str = Field(min_length=1, max_length=240)
     depends_on: list[str] = Field(default_factory=list, max_length=50)
     completion_criteria: str = Field(default="", max_length=500)
+    input_refs: list[TaskSourceRefIn] = Field(default_factory=list, max_length=20)
+    user_locked: bool = False
+    locked_reason: Optional[Literal["edit", "explicit"]] = None
+    recovery_class: Optional[Literal["side_effect_free", "idempotent", "side_effectful"]] = None
+
+
+class PlanProposalIn(BaseModel):
+    goal_summary: str = Field(min_length=1, max_length=200)
+    requires_approval: bool = False
+    source_session_id: Optional[str] = Field(default=None, max_length=80)
+    nodes: list[TaskPlanNodeIn] = Field(min_length=1, max_length=50)
 
 
 class TaskPlanIn(BaseModel):
@@ -3585,6 +3627,66 @@ def link_task_run_artifact(run_id: str, body: TaskArtifactLinkIn) -> dict:
         run_id, body.artifact_id, node_id=body.node_id, label=body.label,
         expected_revision=body.expected_revision,
     ))
+
+
+@app.post("/api/task-runs/from-proposal")
+def create_run_from_proposal(body: PlanProposalIn) -> dict:
+    try:
+        proposal, errors = task_planner.validate_proposal({
+            "goal_summary": body.goal_summary,
+            "requires_approval": body.requires_approval,
+            "nodes": [item.model_dump() for item in body.nodes],
+        })
+    except Exception:  # noqa: BLE001 - 提案必须 fail closed
+        raise HTTPException(422, "提案无法解析")
+    if errors:
+        raise HTTPException(422, {"code": "task_plan_proposal_invalid",
+                                  "message": "；".join(errors)})
+    task = create_task(TaskIn(
+        title=proposal["goal_summary"][:80] or "未命名任务",
+        source_session_id=body.source_session_id,
+    ))
+    run = task_runs.create(task_id=task["id"],
+                           goal_summary=proposal["goal_summary"],
+                           source_session_id=body.source_session_id)
+    return _task_run_call(lambda: task_runs.replace_plan(
+        run["id"], proposal["nodes"], requires_approval=proposal["requires_approval"],
+        expected_revision=run["revision"],
+    ))
+
+
+@app.post("/api/task-runs/{run_id}/planner-proposal")
+async def generate_run_plan_proposal(run_id: str) -> dict:
+    run = task_runs.get(run_id)
+    if run is None:
+        raise HTTPException(404, "task_run_not_found")
+    provider, model = _current_model()
+    locked_nodes = [node for node in (run["nodes"] or []) if node.get("user_locked")]
+    context = f"当前目标：{run['goal_summary']}"
+    if run.get("nodes"):
+        context += "\n当前计划结构：" + json.dumps(
+            [{"client_id": node["client_id"], "title": node["title"],
+              "depends_on": node["depends_on"],
+              "completion_criteria": node["completion_criteria"]}
+             for node in run["nodes"]], ensure_ascii=False,
+        )[:2000]
+    try:
+        proposal = await task_planner.generate_proposal(
+            provider=provider, model=model, goal=run["goal_summary"],
+            context=context, locked_nodes=locked_nodes,
+        )
+    except llm.LLMError as error:
+        raise HTTPException(422, {"code": "planner_unavailable",
+                                  "message": error.hint or error.message})
+    return proposal
+
+
+@app.get("/api/task-runs/{run_id}/recovery")
+def get_task_run_recovery(run_id: str) -> dict:
+    result = task_runs.recovery_view(run_id)
+    if result is None:
+        raise HTTPException(404, "task_run_not_found")
+    return result
 
 
 # ---------------------------------------------------------------- 供应商 / 模型

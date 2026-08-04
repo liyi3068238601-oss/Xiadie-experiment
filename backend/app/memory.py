@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import re
 
-from . import db
+from . import db, task_runs
 
 MAX_INJECT = 12
 MAX_INJECT_CHARS = 2400
@@ -176,6 +176,7 @@ def delete_memory(mid: str, *, privacy: bool = False) -> bool:
         else:
             _event(conn, "fragment", mid, "deleted", before, after, "user")
         conn.commit()
+        task_runs.invalidate_source_links("memory_fragment", mid, "记忆已删除")
         return True
     finally:
         conn.close()

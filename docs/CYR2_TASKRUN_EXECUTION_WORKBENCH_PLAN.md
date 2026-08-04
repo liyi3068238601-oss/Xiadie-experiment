@@ -1,6 +1,6 @@
 # CYR.2 TaskRun 执行工作台施工计划
 
-> 状态：CYR.2A 与 CYR.2B（合同闭合 + UX 工作台）已完成并合入 `main`（2026-08-04）；下一批次为 CYR.2C 单 Agent Planner 与恢复策略
+> 状态：CYR.2A、CYR.2B 与 CYR.2C（Planner/锁定/来源/恢复）已完成并合入 `main`（2026-08-04）；下一批次为 CYR.2D 全链路工作台验收
 > 最后更新：2026-08-04
 > 当前批次设计：[CYR.2B 合同闭合批次设计](superpowers/specs/2026-08-02-cyr2b-contract-closure-design.md)
 > 适用范围：Task、TaskRun、TaskNode、恢复、任务台与执行审计
@@ -206,11 +206,11 @@ CYR.2B 参考以下开源项目的协议和交互思想，但不直接复制代�
 
 ### CYR.2C：Agent Planner 与恢复策略
 
-- [ ] 单 Agent 从当前请求形成候选计划；程序校验后才落库。
-- [ ] 用户修改优先，模型不得覆盖用户锁定节点。
-- [ ] 节点输入/输出使用引用和有界摘要，来源失效 fail closed。
-- [ ] 为无副作用、幂等和有副作用工具分别定义恢复策略。
-- [ ] 恢复面板展示最后证据、风险、可继续/重试/重规划选项。
+- [x] 单 Agent 从当前请求形成候选计划；程序校验后才落库。
+- [x] 用户修改优先，模型不得覆盖用户锁定节点。
+- [x] 节点输入/输出使用引用和有界摘要，来源失效 fail closed。
+- [x] 为无副作用、幂等和有副作用工具分别定义恢复策略。
+- [x] 恢复面板展示最后证据、风险、可继续/重试/重规划选项。
 
 ### CYR.2D：工作台验收
 
@@ -236,9 +236,9 @@ CYR.2 全阶段退出门：
 
 ## 11. 后续衔接
 
-CYR.2B（合同闭合 + UX 工作台）已于 2026-08-04 合入 `main` 收口，验收记录见 `docs/reports/cyr2b-closure-acceptance.md`。
+CYR.2B（合同闭合 + UX 工作台）已于 2026-08-04 合入 `main` 收口，验收记录见 `docs/reports/cyr2b-closure-acceptance.md`；CYR.2C（Agent Planner / 锁定 / 来源引用 / 恢复协议与面板）收口验收见 `docs/reports/cyr2c-closure-acceptance.md`。
 
-下一批次为 CYR.2C：单 Agent Planner、来源引用、恢复策略与用户锁定节点。CYR.2 全阶段完成后才进入 CYR.3：建立 ToolRegistry、PermissionGuard、ConfirmationRequest 和正式 Artifact。ToolRun 已有权威状态机，CYR.3 的工具适配器必须复用它，并把 `task_run_id` 与当前节点绑定；任何插件或工具不得直接把节点写成成功。
+下一批次为 CYR.2D：取消竞态、崩溃、打包态与全链路工作台验收。CYR.2 全阶段完成后才进入 CYR.3：建立 ToolRegistry、PermissionGuard、ConfirmationRequest 和正式 Artifact。ToolRun 已有权威状态机，CYR.3 的工具适配器必须复用它，并把 `task_run_id` 与当前节点绑定；任何插件或工具不得直接把节点写成成功。
 
 ## CYR.2B closure note (2026-08-04)
 

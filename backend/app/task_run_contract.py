@@ -65,6 +65,18 @@ ERROR_SPECS: dict[str, ErrorSpec] = {
     "task_plan_cycle": ErrorSpec(
         "计划步骤之间不能形成循环依赖。", "modify_then_retry",
     ),
+    "task_source_ref_unknown": ErrorSpec(
+        "计划引用了不存在的来源。", "modify_then_retry",
+    ),
+    "task_source_ref_invalid": ErrorSpec(
+        "计划引用了已失效的来源。", "modify_then_retry",
+    ),
+    "task_source_invalidated": ErrorSpec(
+        "计划包含已失效的来源引用，无法开始执行。", "modify_then_retry",
+    ),
+    "task_plan_locked_node_modified": ErrorSpec(
+        "已锁定步骤在重新生成中不能修改。", "modify_then_retry",
+    ),
 }
 
 

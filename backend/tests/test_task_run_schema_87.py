@@ -61,7 +61,7 @@ def _columns(conn, table: str) -> dict[str, tuple]:
 
 
 def test_schema_87_new_database_has_approval_and_skip_evidence():
-    assert db.get_schema_version() == 87
+    assert db.get_schema_version() == 88
     conn = db.connect()
     try:
         run_columns = _columns(conn, "task_runs")
@@ -198,4 +198,4 @@ def test_new_and_upgraded_schema_87_have_matching_taskrun_shapes(schema86_db, tm
 def test_schema_87_init_is_idempotent():
     db.init_db()
     db.init_db()
-    assert db.get_schema_version() == 87
+    assert db.get_schema_version() == 88

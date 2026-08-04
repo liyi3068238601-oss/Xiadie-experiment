@@ -3298,6 +3298,300 @@ input[type="range"].xd-range::-moz-range-thumb { width: 20px; height: 20px; bord
   gap: 8px;
   margin: 14px 0;
 }
+
+/* CYR.2C 聊天候选计划卡（UI 设计 v0.2） */
+.plan-card {
+  display: grid;
+  gap: 9px;
+  width: min(480px, 100%);
+  padding: 14px 15px 12px;
+  border: 1px solid rgba(157, 132, 255, 0.3);
+  border-left: 3px solid var(--violet);
+  border-radius: 16px;
+  color: #dcd6ec;
+  background:
+    radial-gradient(circle at 95% 0, rgba(69, 199, 255, 0.08), transparent 32%),
+    linear-gradient(145deg, rgba(38, 25, 70, 0.97), rgba(20, 14, 42, 0.97));
+  box-shadow: 0 18px 50px rgba(5, 3, 18, 0.36), inset 0 1px rgba(255, 255, 255, 0.04);
+}
+.plan-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.plan-goal {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1edfb;
+}
+.plan-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+  color: var(--text-faint);
+  font-size: 9px;
+}
+.plan-stats b {
+  color: var(--violet-soft);
+}
+.plan-nodes {
+  list-style: none;
+  display: grid;
+  gap: 5px;
+}
+.plan-nodes li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 7px 9px;
+  border: 1px solid rgba(157, 132, 255, 0.13);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.node-idx {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--violet-soft);
+  background: rgba(124, 92, 255, 0.16);
+  font-size: 9px;
+}
+.plan-nodes strong {
+  font-size: 11px;
+  color: #dcd6e9;
+}
+.plan-nodes small {
+  color: var(--text-faint);
+  font-size: 9px;
+}
+.plan-nodes small.dep {
+  color: #b7a9ea;
+}
+.more-nodes {
+  justify-self: start;
+  color: var(--violet-soft);
+  font-size: 10px;
+}
+.plan-actions {
+  display: flex;
+  gap: 8px;
+}
+.plan-primary {
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  background: linear-gradient(135deg, var(--violet), var(--indigo));
+  box-shadow: 0 0 16px rgba(124, 92, 255, 0.3);
+}
+.plan-ghost {
+  padding: 8px 14px;
+  border: 1px solid var(--glass-border-lit);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.plan-ghost:hover {
+  color: #e5dff4;
+}
+.plan-note {
+  color: var(--text-faint);
+  font-size: 9px;
+}
+
+/* CYR.2C 任务工作台：来源引用、锁定与失效横幅（UI 设计 v0.2） */
+.task-node {
+  flex-wrap: wrap;
+}
+.task-node[data-lock="explicit"] {
+  border-left-color: var(--violet);
+}
+.node-lock-pill {
+  padding: 1px 6px;
+  border-radius: 99px;
+  color: #b9a9f7;
+  background: rgba(124, 92, 255, 0.12);
+  font-size: 8px;
+  white-space: nowrap;
+}
+.node-lock-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  border: 1px solid rgba(187, 177, 221, 0.16);
+  border-radius: 6px;
+  color: #aaa3b0;
+  font-size: 9px;
+  background: rgba(124, 92, 255, 0.06);
+}
+.node-lock-btn:hover {
+  color: var(--violet-soft);
+}
+.node-source-row {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.source-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border: 1px solid rgba(157, 132, 255, 0.13);
+  border-radius: 6px;
+  color: #948ba8;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 8px;
+  cursor: help;
+}
+.source-ref-chip.memory {
+  color: #b7a9ea;
+}
+.source-ref-chip.knowledge_source {
+  color: #79bad0;
+}
+.source-ref-chip.conversation {
+  color: #a7d8c2;
+}
+.source-ref-chip.invalid {
+  border-color: rgba(233, 135, 154, 0.4);
+  color: #f0b3bf;
+  background: rgba(233, 135, 154, 0.07);
+  text-decoration: line-through;
+}
+.run-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+}
+.run-banner strong {
+  font-size: 10px;
+}
+.run-banner.invalid {
+  border-color: rgba(233, 135, 154, 0.35);
+  background: rgba(233, 135, 154, 0.06);
+  border-left: 3px solid var(--danger);
+}
+.run-banner.invalid strong {
+  color: #f0b3bf;
+}
+.run-banner.warn {
+  border-color: rgba(234, 200, 120, 0.32);
+  background: rgba(234, 200, 120, 0.06);
+  border-left: 3px solid var(--warn);
+}
+.run-banner.warn strong {
+  color: #efd9a3;
+}
+.task-plan-node[data-lock="explicit"] {
+  border-left-color: var(--violet);
+}
+
+/* CYR.2C 恢复面板（UI 设计 v0.2） */
+.recovery-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 12px 13px;
+  border: 1px solid rgba(157, 132, 255, 0.18);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: rgba(44, 28, 78, 0.5);
+}
+.recovery-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.recovery-card h2 {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #e0dae9;
+}
+.risk-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  font-size: 9px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.risk-pill.low {
+  border-color: rgba(98, 201, 155, 0.3);
+  color: #9fe0bf;
+  background: rgba(98, 201, 155, 0.07);
+}
+.risk-pill.mid {
+  border-color: rgba(234, 200, 120, 0.3);
+  color: #efd9a3;
+  background: rgba(234, 200, 120, 0.07);
+}
+.risk-pill.high {
+  border-color: rgba(233, 135, 154, 0.35);
+  color: #f0b3bf;
+  background: rgba(233, 135, 154, 0.07);
+}
+.risk-pill.none {
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #8f88a0;
+  background: rgba(255, 255, 255, 0.025);
+}
+.recovery-evidence {
+  display: grid;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid rgba(157, 132, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(10, 8, 16, 0.22);
+}
+.evidence-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 9px;
+}
+.evidence-label {
+  width: 42px;
+  flex: 0 0 auto;
+  color: var(--text-faint);
+}
+.recovery-actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.recovery-actions button {
+  padding: 7px 13px;
+  border: 1px solid rgba(187, 177, 221, 0.16);
+  border-radius: 8px;
+  color: #b8afd0;
+  font-size: 10px;
+}
+.recovery-actions .primary {
+  color: #fff;
+  background: linear-gradient(135deg, var(--violet), var(--indigo));
+}
+.recovery-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.empty-copy {
+  color: var(--text-faint);
+  font-size: 10px;
+  line-height: 1.7;
+}
 .context-diagnostic-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -65,7 +65,7 @@ def _seed_sources() -> dict[str, str]:
 def test_schema_72_has_only_minimal_dependency_metadata():
     conn = db.connect()
     try:
-        assert conn.execute("SELECT value FROM schema_meta WHERE key='schema_version'").fetchone()[0] == "87"
+        assert conn.execute("SELECT value FROM schema_meta WHERE key='schema_version'").fetchone()[0] == "88"
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(derived_dependencies)")}
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     finally:
@@ -73,6 +73,44 @@ def test_schema_72_has_only_minimal_dependency_metadata():
     assert {"source_revision", "source_hash", "privacy_scope", "source_locator", "dependency_status"} <= columns
     assert not ({"content", "body", "summary", "source_body"} & columns)
     assert "source_refs" not in tables
+
+
+def test_cyr2c_memory_source_resolvers() -> None:
+    conn = db.connect()
+    try:
+        now = db.now()
+        conn.execute(
+            "INSERT INTO memory_episodes(id,title,summary,start_at,end_at,status,created_at,updated_at) "
+            "VALUES(?,?,?,?,?,?,?,?)",
+            ("ep-1", "共同项目", "一起做的检索改进", now, now, "active", now, now),
+        )
+        conn.execute(
+            "INSERT INTO memory_sagas(id,title,summary,start_at,end_at,status,created_at,updated_at) "
+            "VALUES(?,?,?,?,?,?,?,?)",
+            ("sg-1", "知识库建设", "检索体系演进", now, now, "active", now, now),
+        )
+        conn.execute(
+            "INSERT INTO memory_entities(id,name,summary,status,created_at,updated_at) "
+            "VALUES(?,?,?,?,?,?)",
+            ("en-1", "知识库", "用户的项目", "active", now, now),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    try:
+        for kind, sid in (("memory_episode", "ep-1"), ("memory_saga", "sg-1"),
+                          ("memory_entity", "en-1")):
+            ref = kig_sources.registry.resolve(kind, sid)
+            assert ref.status == "active"
+    finally:
+        conn = db.connect()
+        try:
+            conn.execute("DELETE FROM memory_episodes WHERE id='ep-1'")
+            conn.execute("DELETE FROM memory_sagas WHERE id='sg-1'")
+            conn.execute("DELETE FROM memory_entities WHERE id='en-1'")
+            conn.commit()
+        finally:
+            conn.close()
 
 
 def test_all_authoritative_adapters_are_body_free_and_exactly_validated():

@@ -4,13 +4,16 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from . import db, task_run_contract as contract
+from . import db, kig_sources, task_run_contract as contract
 from .observability import bind_context, log_event, new_trace_id
 from .observability.redaction import redact_text
 
 RUN_TERMINAL = contract.RUN_TERMINAL
 NODE_TERMINAL = contract.NODE_TERMINAL
 MAX_NODES = 50
+SOURCE_KINDS = {"memory_fragment", "memory_episode", "memory_saga",
+                "memory_entity", "knowledge_source", "conversation"}
+RECOVERY_CLASSES = {"side_effect_free", "idempotent", "side_effectful"}
 
 
 class TaskRunError(ValueError):
@@ -52,6 +55,7 @@ def _decode_run(row: Any) -> dict[str, Any]:
 
 def _decode_node(row: Any) -> dict[str, Any]:
     item = dict(row)
+    item["user_locked"] = bool(item.get("user_locked"))
     try:
         item["depends_on"] = json.loads(item.pop("depends_on_json"))
     except (TypeError, ValueError):
@@ -208,9 +212,17 @@ def get(run_id: str) -> dict[str, Any] | None:
         if row is None:
             return None
         result = _decode_run(row)
-        result["nodes"] = [_decode_node(item) for item in conn.execute(
+        node_rows = conn.execute(
             "SELECT * FROM task_nodes WHERE task_run_id=? ORDER BY position,id", (run_id,),
-        ).fetchall()]
+        ).fetchall()
+        result["nodes"] = []
+        for node_row in node_rows:
+            item = _decode_node(node_row)
+            item["source_links"] = [dict(link) for link in conn.execute(
+                "SELECT id,source_kind,source_id,summary,status,invalidated_at,invalidated_reason "
+                "FROM task_node_source_links WHERE node_id=? ORDER BY id", (node_row["id"],),
+            ).fetchall()]
+            result["nodes"].append(item)
         result["events"] = [_decode_event(item) for item in conn.execute(
             "SELECT * FROM task_run_events WHERE task_run_id=? ORDER BY created_at,id", (run_id,),
         ).fetchall()]
@@ -239,12 +251,33 @@ def _normalize_plan(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
         dependencies = raw.get("depends_on") or []
         if not isinstance(dependencies, list) or len(dependencies) > MAX_NODES:
             raise TaskRunConflict("task_plan_dependencies_invalid")
+        raw_refs = raw.get("input_refs") or []
+        if not isinstance(raw_refs, list) or len(raw_refs) > 20:
+            raise TaskRunConflict("task_plan_dependencies_invalid")
+        refs: list[dict[str, str]] = []
+        for ref in raw_refs:
+            kind = _text(ref.get("source_kind") if isinstance(ref, dict) else None, 40)
+            source_id = _text(ref.get("source_id") if isinstance(ref, dict) else None, 200)
+            if kind not in SOURCE_KINDS or not source_id:
+                raise TaskRunConflict("task_source_ref_invalid")
+            refs.append({"source_kind": kind, "source_id": source_id})
+        locked = bool(raw.get("user_locked"))
+        locked_reason = _text(raw.get("locked_reason"), 20) or None
+        if locked_reason not in (None, "edit", "explicit"):
+            raise TaskRunConflict("task_plan_node_invalid")
+        recovery_class = _text(raw.get("recovery_class"), 30) or None
+        if recovery_class is not None and recovery_class not in RECOVERY_CLASSES:
+            raise TaskRunConflict("task_plan_node_invalid")
         ids.add(client_id)
         prepared.append({
             "client_id": client_id,
             "title": title,
             "raw_dependencies": [_text(item, 80) for item in dependencies],
             "completion_criteria": _text(raw.get("completion_criteria"), 500),
+            "input_refs": refs,
+            "user_locked": locked,
+            "locked_reason": locked_reason,
+            "recovery_class": recovery_class,
         })
     positions = {item["client_id"]: position for position, item in enumerate(prepared)}
     normalized: list[dict[str, Any]] = []
@@ -277,14 +310,94 @@ def _normalize_plan(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _stored_plan(conn, run_id: str) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        "SELECT * FROM task_nodes WHERE task_run_id=? ORDER BY position,id", (run_id,),
+    ).fetchall()
     return [{
         "client_id": row["client_id"],
         "title": row["title"],
         "depends_on": json.loads(row["depends_on_json"] or "[]"),
         "completion_criteria": row["completion_criteria"],
-    } for row in conn.execute(
-        "SELECT * FROM task_nodes WHERE task_run_id=? ORDER BY position,id", (run_id,),
-    ).fetchall()]
+        "input_refs": _stored_source_refs(conn, row["id"]),
+        "user_locked": bool(row["user_locked"]),
+        "locked_reason": row["locked_reason"],
+        "recovery_class": row["recovery_class"],
+    } for row in rows]
+
+
+def validate_plan_shape(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Pure plan-shape validation shared by planner and workbench (raises TaskRunConflict)."""
+    return _normalize_plan(nodes)
+
+
+def _resolve_source_link(conn, ref: dict[str, str]) -> tuple[str, str]:
+    kind, source_id = ref["source_kind"], ref["source_id"]
+    if kind == "conversation":
+        return "active", ""  # 边界见 spec §7.3：只记录，不做失效检测
+    kig_kind = "knowledge_document" if kind == "knowledge_source" else kind
+    try:
+        source_ref = kig_sources.registry.resolve(kig_kind, source_id)
+    except kig_sources.SourceRefError as exc:
+        if exc.code == "source_missing":
+            raise TaskRunConflict("task_source_ref_unknown")
+        raise TaskRunConflict("task_source_ref_invalid")
+    if source_ref.status != "active":
+        raise TaskRunConflict("task_source_ref_invalid")
+    return "active", _source_summary(conn, kind, source_id)
+
+
+def _source_summary(conn, kind: str, source_id: str) -> str:
+    sqls = {
+        "memory_fragment": ("SELECT content FROM memory_fragments WHERE id=?",
+                            lambda row: row["content"]),
+        "memory_episode": ("SELECT summary FROM memory_episodes WHERE id=?",
+                           lambda row: row["summary"]),
+        "memory_saga": ("SELECT summary FROM memory_sagas WHERE id=?",
+                        lambda row: row["summary"]),
+        "memory_entity": ("SELECT name,summary FROM memory_entities WHERE id=?",
+                          lambda row: f"{row['name']}：{row['summary']}"),
+        "knowledge_source": ("SELECT original_name FROM knowledge_documents WHERE id=?",
+                             lambda row: row["original_name"]),
+    }
+    sql, extract = sqls[kind]
+    row = conn.execute(sql, (source_id,)).fetchone()
+    return redact_text(extract(row) if row is not None else "", limit=240)
+
+
+def _stored_source_refs(conn, node_id: str) -> list[dict[str, str]]:
+    return [{"source_kind": row["source_kind"], "source_id": row["source_id"]}
+            for row in conn.execute(
+                "SELECT source_kind,source_id FROM task_node_source_links "
+                "WHERE node_id=? ORDER BY id", (node_id,),
+            ).fetchall()]
+
+
+def _replace_source_links(conn, run_id: str, node_id: str,
+                          refs: list[dict[str, str]]) -> None:
+    conn.execute("DELETE FROM task_node_source_links WHERE node_id=?", (node_id,))
+    for ref in refs:
+        status, summary = _resolve_source_link(conn, ref)
+        conn.execute(
+            "INSERT INTO task_node_source_links(id,task_run_id,node_id,source_kind,source_id,"
+            "summary,status,created_at) VALUES(?,?,?,?,?,?,?,?)",
+            (f"tsl_{db.new_id()}", run_id, node_id, ref["source_kind"], ref["source_id"],
+             summary, status, db.now()),
+        )
+
+
+def invalidate_source_links(source_kind: str, source_id: str, reason: str) -> int:
+    conn = db.connect()
+    try:
+        now = db.now()
+        updated = conn.execute(
+            "UPDATE task_node_source_links SET status='invalidated',invalidated_at=?,"
+            "invalidated_reason=? WHERE source_kind=? AND source_id=? AND status='active'",
+            (now, redact_text(reason, limit=240), source_kind, source_id),
+        ).rowcount
+        conn.commit()
+        return int(updated or 0)
+    finally:
+        conn.close()
 
 
 def replace_plan(run_id: str, nodes: list[dict[str, Any]], *, expected_revision: int,
@@ -300,6 +413,22 @@ def replace_plan(run_id: str, nodes: list[dict[str, Any]], *, expected_revision:
         except TaskRunConflict as error:
             error.run_id = run_id
             raise _MutationConflict(error) from error
+        existing_nodes = conn.execute(
+            "SELECT * FROM task_nodes WHERE task_run_id=? ORDER BY position", (run_id,),
+        ).fetchall()
+        locked_existing = {row["client_id"]: dict(row) for row in existing_nodes if row["user_locked"]}
+        for item in plan:
+            prev = locked_existing.get(item["client_id"])
+            if prev is None:
+                continue
+            prev_refs = _stored_source_refs(conn, prev["id"])
+            if (prev["title"] != item["title"]
+                    or prev["completion_criteria"] != item["completion_criteria"]
+                    or json.loads(prev["depends_on_json"] or "[]") != item["depends_on"]
+                    or prev_refs != item["input_refs"]):
+                raise _MutationConflict(TaskRunConflict(
+                    "task_plan_locked_node_modified", run_id=run_id,
+                ))
         decision = contract.decide_run(contract.RunCommandContext(
             command="replace_plan", status=run["status"], revision=run["revision"],
             expected_revision=expected_revision, plan_version=run["plan_version"],
@@ -319,12 +448,16 @@ def replace_plan(run_id: str, nodes: list[dict[str, Any]], *, expected_revision:
         conn.execute("DELETE FROM task_nodes WHERE task_run_id=?", (run_id,))
         now = db.now()
         for position, item in enumerate(plan):
+            node_id = f"tnd_{db.new_id()}"
             conn.execute(
                 "INSERT INTO task_nodes(id,task_run_id,client_id,position,title,status,depends_on_json,"
-                "completion_criteria,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                (f"tnd_{db.new_id()}", run_id, item["client_id"], position, item["title"], "pending",
-                 json.dumps(item["depends_on"], ensure_ascii=False), item["completion_criteria"], now, now),
+                "completion_criteria,user_locked,locked_reason,recovery_class,created_at,updated_at) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (node_id, run_id, item["client_id"], position, item["title"], "pending",
+                 json.dumps(item["depends_on"], ensure_ascii=False), item["completion_criteria"],
+                 int(item["user_locked"]), item["locked_reason"], item["recovery_class"], now, now),
             )
+            _replace_source_links(conn, run_id, node_id, item["input_refs"])
         target = "awaiting_approval" if requires_approval else "ready"
         revision = int(run["revision"]) + 1
         plan_version = int(run["plan_version"]) + 1
@@ -414,6 +547,11 @@ def _run_command(run_id: str, command: contract.RunCommand, expected_revision: i
         _raise_decision(decision, run_id)
         target = decision.target_status
         assert target is not None
+        if command == "start" and conn.execute(
+            "SELECT 1 FROM task_node_source_links WHERE task_run_id=? AND status='invalidated' "
+            "LIMIT 1", (run_id,),
+        ).fetchone() is not None:
+            raise _MutationConflict(TaskRunConflict("task_source_invalidated", run_id=run_id))
         old = str(run["status"])
         now = db.now()
         revision = int(run["revision"]) + 1
@@ -486,7 +624,13 @@ def _refresh_ready_nodes(run_id: str, conn) -> None:
         if row["status"] not in {"pending", "blocked"}:
             continue
         dependencies = json.loads(row["depends_on_json"] or "[]")
-        status = "ready" if all(dependency in satisfied for dependency in dependencies) else "blocked"
+        has_invalid = conn.execute(
+            "SELECT 1 FROM task_node_source_links WHERE node_id=? AND status='invalidated' LIMIT 1",
+            (row["id"],),
+        ).fetchone() is not None
+        status = ("blocked" if has_invalid
+                  else "ready" if all(dependency in satisfied for dependency in dependencies)
+                  else "blocked")
         conn.execute("UPDATE task_nodes SET status=?,updated_at=? WHERE id=?", (status, now, row["id"]))
 
 
@@ -741,3 +885,46 @@ def recover_stale_runs() -> int:
              level="WARNING", from_status="running", status="recovery_required",
              reason_code="process_restarted")
     return len(changed)
+
+
+def recovery_view(run_id: str) -> dict | None:
+    """Aggregate authoritative recovery advice from run, nodes and ToolRun evidence."""
+    from . import recovery_policy
+    run = get(run_id)
+    if run is None:
+        return None
+    tool_runs = run.get("tool_runs") or []
+    last = tool_runs[-1] if tool_runs else None
+    has_terminal = bool(last and last.get("status") in {"succeeded", "failed", "completed"})
+    node = next((n for n in (run.get("nodes") or [])
+                 if n.get("status") not in NODE_TERMINAL), None)
+    recovery_class = node.get("recovery_class") if node else None
+    advice = recovery_policy.decide_recovery(
+        recovery_class, has_terminal_evidence=has_terminal,
+        retries_used=_count_retries(run, last),
+    )
+    return {
+        "run_id": run_id,
+        "status": run["status"],
+        "recovery_class": recovery_class,
+        "last_evidence": {
+            "tool_name": last.get("tool_name") if last else None,
+            "phase": last.get("phase") if last else None,
+            "status": last.get("status") if last else None,
+            "trace_id": last.get("trace_id") if last else None,
+            "error_message": last.get("error_message") if last else None,
+        } if last else None,
+        "retries_used": _count_retries(run, last),
+        **advice,
+    }
+
+
+def _count_retries(run: dict, last: dict | None) -> int:
+    """Bounded heuristic: tool interruption events observed for this run."""
+    if not last:
+        return 0
+    count = 0
+    for event in run.get("events") or []:
+        if event.get("event_type") == "task_node_running" and event.get("reason_code") == "retry":
+            count += 1
+    return min(count, 9)
