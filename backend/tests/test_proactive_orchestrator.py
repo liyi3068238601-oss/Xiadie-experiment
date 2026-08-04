@@ -148,7 +148,7 @@ def test_schema_60_has_runtime_delivery_and_feedback_tables():
         ).fetchall()}
     finally:
         conn.close()
-        assert version == "88"
+        assert version == "89"
     assert {
         "proactive_runtime_sources", "proactive_candidate_claims",
         "proactive_runtime_sagas", "proactive_deliveries",

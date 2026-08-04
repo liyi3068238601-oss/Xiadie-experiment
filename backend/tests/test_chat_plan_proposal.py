@@ -16,4 +16,4 @@ def test_mock_chat_never_emits_plan_proposal() -> None:
     # 演示模型下 gen() 不调用 planner：以意图匹配与生成 fail closed 组合断言。
     assert task_planner.matches_planning_intent("帮我拆解一个方案，列成步骤")
     # 生成失败关闭（mock provider）由 test_task_planner 覆盖；此处锁行为契约。
-    assert db.get_schema_version() == 88
+    assert db.get_schema_version() == 89
