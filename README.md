@@ -4,7 +4,7 @@ Xiadie Experiment 保留“遐蝶”的稳定身份、人格和自然表达，�
 
 本仓库不再发展角色离线生活模拟。原 LIFE 生活连续性系统已完成物理退役：运行时代码、UI、API、worker、adapter 和专属数据库表已经移除，同时保留用户记忆、知识、会话连续性、任务事实和角色人格。
 
-> 当前状态（2026-08-04）：RETIRE.0～RETIRE.3、LOG.1～LOG.5、CYR.1/CYR.1S、CYR.2A 与 CYR.2B（合同闭合 + UX 工作台）均已合入 `main`。CYR.2B 收口内容包括：Schema 87 纯 Run/Node 合同内核、API 与领域层强制 CAS、统一 `{code,message,retry,current}` 409、精确语义幂等、计划批准只绑定 `plan_version`，以及多节点计划编辑、执行历史/再次执行和 TaskRun 专用 body-free 事件 SSE（游标补齐与 gap 恢复）。下一施工批次为 CYR.2C：单 Agent Planner、来源引用、恢复策略与用户锁定节点。真实使用观察继续作为软指标推进，不阻塞本轮工程门禁。
+> 当前状态（2026-08-04）：RETIRE.0～RETIRE.3、LOG.1～LOG.5、CYR.1/CYR.1S、CYR.2A、CYR.2B（合同闭合 + UX 工作台）与 CYR.2C（Agent Planner + 锁定 + 来源引用 + 恢复协议/面板）均已合入 `main`。CYR.2C 收口内容包括：聊天候选计划卡与 `from-proposal` 落库、任务页重新生成计划、编辑即锁定/显式锁定、节点来源引用与失效 fail closed、三类恢复语义矩阵与恢复面板骨架。下一施工批次为 CYR.2D：取消竞态、崩溃、打包态与全链路工作台验收。真实使用观察继续作为软指标推进，不阻塞本轮工程门禁。
 
 Persona v2.3 只依赖资源完整性和模型基本兼容能力，不依赖逐模型“认证”才能运行。模型固定集结果仅显示为已验证/未验证并用于发布质量管理；更换模型、Provider 或接口地址不会让 Persona 回退，也不会由 Persona 强制采样参数。
 
@@ -86,7 +86,7 @@ LIFE 专属日程、日记和生活事件 decision kind 已随 RETIRE.1 删除�
 - 支持批准、开始、暂停、继续、取消和重新规划；重复取消与暂停幂等。
 - 应用重启会把遗留执行标为 `recovery_required`，等待用户明确继续，不在退出后秘密运行。
 - TaskRun 通过 `trace_id` 关联诊断日志与 ToolRun，并可保存未来正式 Artifact 的 ID 引用。
-- 任务台提供结构化多节点计划编辑器（依赖与验收条件）、节点跳过证据、执行历史与“再次执行”，以及 TaskRun 专用 body-free 事件 SSE（游标补齐与 gap 恢复）；Agent Planner 属于 CYR.2C。
+- 任务台提供结构化多节点计划编辑器（依赖与验收条件）、节点跳过证据、执行历史与“再次执行”，以及 TaskRun 专用 body-free 事件 SSE（游标补齐与 gap 恢复）；CYR.2C 已接入聊天候选计划生成、来源引用与锁定语义，并提供恢复面板骨架。
 - CYR.2B 合同闭合批次已落地 Schema 87、纯 Run/Node 决策矩阵、API 与领域层双层强制 CAS、精确语义幂等、统一 `{code,message,retry,current}` 409 和拒绝零写入。
 - `start`/`resume`、Task 投影、节点刷新与事件现在同事务提交；当前计划批准绑定 `plan_version`，节点跳过保存稳定原因并解除下游依赖，终态仍可追加真实晚到 ArtifactRef。
 - 计划批准只批准当前计划，不授予文件、网络、工具、账号或外部消息权限；正式权限与确认仍由 CYR.3 的 ToolRegistry / PermissionGuard / ConfirmationRequest 负责。
@@ -304,6 +304,7 @@ npm.cmd run build
 | [CYR.2 TaskRun 执行工作台施工计划](docs/CYR2_TASKRUN_EXECUTION_WORKBENCH_PLAN.md) | TaskRun/TaskNode 状态机、计划、恢复、取消、审计与任务台 |
 | [CYR.2B 合同闭合批次设计](docs/superpowers/specs/2026-08-02-cyr2b-contract-closure-design.md) | 强制 revision、状态矩阵、语义幂等、统一错误合同与批准边界 |
 | [CYR.2B 收口验收报告](docs/reports/cyr2b-closure-acceptance.md) | CYR.2B 合同闭合与 UX 工作台门禁与交付记录 |
+| [CYR.2C 收口验收报告](docs/reports/cyr2c-closure-acceptance.md) | CYR.2C Planner/锁定/来源/恢复协议门禁与交付记录 |
 | [Cyrene 风格实验计划](docs/CYRENE_STYLE_AGENT_EXPERIMENT_PLAN.md) | 单 Agent 行为质量与能力分层实验路线 |
 | [Cyrene 风格助手长期规划](docs/CYRENE_STYLE_AGENT_LONG_TERM_ROADMAP.md) | Task、Tool、Research、MCP 与 Worker 长期路线 |
 | [项目上下文](docs/CODEX_PROJECT_CONTEXT.md) | 开发与治理约束 |
