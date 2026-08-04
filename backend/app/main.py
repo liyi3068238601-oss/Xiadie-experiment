@@ -33,7 +33,8 @@ from . import (
     knowledge_embeddings, knowledge_grants,
     knowledge_management, knowledge_parser, knowledge_policy, knowledge_recall, knowledge_recall_service, knowledge_search,
     knowledge_worker, kig_evidence, kig_governance, kig_maintenance, kig_pipeline, kig_sources, llm, lore, memory, memory_conflicts, memory_shadow_proposals,
-    persona, persona_output_guard, persona_v2, runtime_logs, short_memo, task_planner,
+    chat_tool_ingress, persona, persona_output_guard, persona_v2, runtime_logs, short_memo,
+    task_planner,
     task_runs, tool_executor, worldbook_r1,
     saga_consolidator, saga_lifecycle, saga_summary,
     saga_summary_service, secret_store, slow_lifecycle, turn_ingress,
@@ -1699,6 +1700,16 @@ async def chat(body: ChatIn) -> StreamingResponse:
                 yield _sse("plan_proposal", proposal)
             except Exception:  # noqa: BLE001 - 规划失败不能破坏已完成回复
                 logger.warning("plan_proposal_failed session_id=%s", body.session_id,
+                               exc_info=True)
+        if not body.regenerate and not temporary_chat:
+            try:
+                tool_result = chat_tool_ingress.run_readonly(
+                    effective_content, workspace=tool_executor.default_workspace(),
+                )
+                if tool_result:
+                    yield _sse("tool_result", tool_result)
+            except Exception:  # noqa: BLE001 - 聊天直调失败不能破坏回复
+                logger.warning("chat_tool_ingress_failed session_id=%s", body.session_id,
                                exc_info=True)
 
     return StreamingResponse(gen(), media_type="text/event-stream")
