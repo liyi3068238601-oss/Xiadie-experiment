@@ -173,6 +173,18 @@ app.add_middleware(
 )
 app.middleware("http")(local_api_guard)
 
+_HTTP_QUIET_PATHS = frozenset({
+    "/api/health",
+})
+_HTTP_POLLING_PATHS = frozenset({
+    "/api/memories",
+    "/api/tasks",
+    "/api/companion-state",
+    "/api/companion-state/events",
+    "/api/archivist/runs",
+    "/api/runtime-logs",
+})
+
 
 @app.middleware("http")
 async def diagnostic_trace_middleware(request: Request, call_next):
@@ -181,9 +193,14 @@ async def diagnostic_trace_middleware(request: Request, call_next):
     trace_id = new_trace_id()
     started = time.monotonic()
     with bind_context(trace_id=trace_id, request_id=request_id or f"req_{db.new_id()}"):
-        quiet = request.url.path == "/api/health" or request.url.path.startswith("/api/diagnostics")
+        quiet = (
+            request.method == "OPTIONS"
+            or request.url.path in _HTTP_QUIET_PATHS
+            or request.url.path.startswith("/api/diagnostics")
+        )
+        polling = request.method == "GET" and request.url.path in _HTTP_POLLING_PATHS
         if not quiet:
-            log_event("http.server", "INFO", "http_request_started", "HTTP request started", fields={
+            log_event("http.server", "DEBUG", "http_request_started", "HTTP request started", fields={
                 "method": request.method, "path": request.url.path,
             })
         try:
@@ -197,7 +214,9 @@ async def diagnostic_trace_middleware(request: Request, call_next):
             raise
         response.headers["X-Xiadie-Trace-Id"] = trace_id
         if not quiet:
-            level = "WARNING" if response.status_code >= 400 else "INFO"
+            level = "WARNING" if response.status_code >= 400 else (
+                "DEBUG" if polling else "INFO"
+            )
             log_event("http.server", level, "http_request_completed", "HTTP request completed", fields={
                 "method": request.method, "path": request.url.path,
                 "status": response.status_code,

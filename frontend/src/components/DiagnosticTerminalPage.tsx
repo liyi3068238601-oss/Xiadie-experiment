@@ -6,8 +6,8 @@ const LEVELS: Array<api.DiagnosticLevel | "ALL"> = [
   "ALL", "TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL",
 ];
 const LEVEL_LABEL: Record<string, string> = {
-  ALL: "全部级别", TRACE: "TRC", DEBUG: "DBG", INFO: "INF",
-  WARNING: "WRN", ERROR: "ERR", CRITICAL: "CRT",
+  ALL: "全部级别", TRACE: "TRACE", DEBUG: "DEBUG", INFO: "INFO",
+  WARNING: "WARNING", ERROR: "ERROR", CRITICAL: "CRITICAL",
 };
 
 function eventText(item: api.DiagnosticLogEvent): string {
@@ -21,11 +21,22 @@ function eventText(item: api.DiagnosticLogEvent): string {
 
 function compactTime(value: string): string {
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.valueOf())) return value.slice(11, 23);
+  if (Number.isNaN(parsed.valueOf())) return `[${value.slice(11, 23)}]`;
   const base = parsed.toLocaleTimeString("zh-CN", {
     hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit",
   });
-  return `${base}.${String(parsed.getMilliseconds()).padStart(3, "0")}`;
+  return `[${base}.${String(parsed.getMilliseconds()).padStart(3, "0")}]`;
+}
+
+const MODULE_COLORS = [
+  "#9db8e8", "#8fceb0", "#e0c08f", "#c9a6e8", "#e39aa8",
+  "#8fd0e0", "#b8c88f", "#e0a97e", "#a8b8e8", "#d5b3d9",
+];
+
+function moduleColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  return MODULE_COLORS[Math.abs(hash) % MODULE_COLORS.length];
 }
 
 function lineMessage(item: api.DiagnosticLogEvent): string {
@@ -38,7 +49,7 @@ function lineMessage(item: api.DiagnosticLogEvent): string {
 export function DiagnosticTerminalPage({ onAudit }: { onAudit: () => void }) {
   const [events, setEvents] = useState<api.DiagnosticLogEvent[]>([]);
   const [connection, setConnection] = useState<"connecting" | "live" | "reconnecting" | "offline">("connecting");
-  const [level, setLevel] = useState<api.DiagnosticLevel | "ALL">("ALL");
+  const [level, setLevel] = useState<api.DiagnosticLevel | "ALL">("INFO");
   const [processFilter, setProcessFilter] = useState("all");
   const [loggerFilter, setLoggerFilter] = useState("");
   const [search, setSearch] = useState("");
@@ -214,7 +225,7 @@ export function DiagnosticTerminalPage({ onAudit }: { onAudit: () => void }) {
             <time>{compactTime(item.timestamp)}</time>
             <strong>{LEVEL_LABEL[item.level] || item.level.slice(0, 3)}</strong>
             <span className="diagnostic-process">{item.process}</span>
-            <span className="diagnostic-logger">{item.logger}</span>
+            <span className="diagnostic-logger" style={{ color: moduleColor(item.logger) }}>{item.logger}</span>
             <span className="diagnostic-correlation">{item.tool_run_id || item.task_run_id || item.trace_id?.slice(-8) || ""}</span>
             <span className="diagnostic-message">{lineMessage(item)}</span>
           </button>

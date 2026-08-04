@@ -11,6 +11,7 @@ import sys
 from threading import RLock
 import time
 from typing import Any
+import zlib
 
 
 LEVEL_COLORS = {
@@ -18,6 +19,20 @@ LEVEL_COLORS = {
     "WARNING": "\x1b[33m", "ERROR": "\x1b[31m", "CRITICAL": "\x1b[1;31m",
 }
 RESET = "\x1b[0m"
+DIM = "\x1b[2m"
+_LEVEL_RANK = {"TRACE": 5, "DEBUG": 10, "INFO": 20, "WARNING": 30,
+               "ERROR": 40, "CRITICAL": 50}
+_MODULE_COLORS = (
+    "\x1b[38;5;111m", "\x1b[38;5;186m", "\x1b[38;5;114m", "\x1b[38;5;173m",
+    "\x1b[38;5;140m", "\x1b[38;5;110m", "\x1b[38;5;150m", "\x1b[38;5;179m",
+    "\x1b[38;5;117m", "\x1b[38;5;176m",
+)
+
+
+def _module_color(logger: str) -> str:
+    """Stable per-module ANSI color so a logger keeps its identity across runs."""
+    index = zlib.crc32(logger.encode("utf-8")) % len(_MODULE_COLORS)
+    return _MODULE_COLORS[index]
 
 
 def encode_event(event: dict[str, Any]) -> str:
@@ -25,27 +40,46 @@ def encode_event(event: dict[str, Any]) -> str:
 
 
 class HumanConsoleSink:
-    def __init__(self) -> None:
+    def __init__(self, *, min_level: str = "INFO") -> None:
         self.stream = sys.stderr
         self.color = bool(getattr(self.stream, "isatty", lambda: False)())
+        self.min_rank = _LEVEL_RANK.get(min_level.upper(), _LEVEL_RANK["INFO"])
         self._lock = RLock()
 
     def emit(self, event: dict[str, Any]) -> None:
         if self.stream is None:
             return
-        timestamp = str(event.get("timestamp", ""))[11:23]
         level = str(event.get("level", "INFO"))
-        logger = str(event.get("logger", "app"))[:24].ljust(24)
+        if _LEVEL_RANK.get(level, _LEVEL_RANK["INFO"]) < self.min_rank:
+            return
+        timestamp = str(event.get("timestamp", ""))[11:19]
+        logger = str(event.get("logger", "app"))[:24]
         trace = str(event.get("trace_id", ""))[-8:]
-        correlation = f" trace={trace}" if trace else ""
-        line = f"{timestamp} {level[:3]:3} {logger}{correlation} {event.get('message', '')}"
+        if event.get("content_class") == "character_mental_activity" and event.get("thought"):
+            body = f"💭 {event['thought']}"
+        elif event.get("method") and event.get("path"):
+            body = f"{event['method']} {event['path']}"
+            if event.get("status") is not None:
+                body += f" -> {event['status']}"
+            if event.get("duration_ms") is not None:
+                body += f" {int(event['duration_ms'])}ms"
+        else:
+            body = str(event.get("message", ""))
         if event.get("error"):
             error = event["error"]
-            line += f" | {error.get('type', 'Error')}: {error.get('message', '')}"
-        if event.get("content_class") == "character_mental_activity" and event.get("thought"):
-            line = f"{timestamp} {level[:3]:3} {logger}{correlation} 💭 {event['thought']}"
+            body += f" | {error.get('type', 'Error')}: {error.get('message', '')}"
         if self.color:
-            line = f"{LEVEL_COLORS.get(level, '')}{line}{RESET}"
+            trace_part = f"{DIM} [trace={trace}]{RESET}" if trace else ""
+            line = (
+                f"{DIM}[{timestamp}]{RESET} "
+                f"{_module_color(logger)}{logger}{RESET}"
+                f"{DIM} | {RESET}"
+                f"{LEVEL_COLORS.get(level, '')}{level}{RESET}"
+                f"{DIM} | {RESET}{body}{trace_part}"
+            )
+        else:
+            trace_part = f" [trace={trace}]" if trace else ""
+            line = f"[{timestamp}] {logger} | {level} | {body}{trace_part}"
         try:
             with self._lock:
                 self.stream.write(line + "\n")

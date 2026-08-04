@@ -133,7 +133,8 @@ def configure_observability(*, force: bool = False) -> None:
             os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data"),
         )
         log_root = os.environ.get("XIADIE_LOG_DIR", os.path.join(data_dir, "logs"))
-        _CONSOLE = HumanConsoleSink()
+        console_level = os.environ.get("XIADIE_CONSOLE_LEVEL", "INFO").upper()
+        _CONSOLE = HumanConsoleSink(min_level=console_level)
         _FILE = RotatingJsonlSink(log_root)
         root = logging.getLogger()
         if not any(isinstance(handler, _BridgeHandler) for handler in root.handlers):
@@ -144,4 +145,5 @@ def configure_observability(*, force: bool = False) -> None:
         log_event("observability", "INFO", "observability_started", "Structured observability started", fields={
             "log_root": log_root,
             "buffer_capacity": BUFFER.max_events,
+            "console_level": console_level,
         })
