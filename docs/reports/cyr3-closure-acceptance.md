@@ -2,7 +2,7 @@
 
 - 批次：CYR.3（ToolRegistry / 权限 / Artifact）
 - 日期：2026-08-04
-- 分支：`agent/cyr3-tools`（合入 `main` 的 merge SHA 见 git 历史）
+- 合入：`agent/cyr3-tools` → `main`（merge `0bf69c3`）
 - 前置基线：CYR.2D 收口（main `7725f7e`，merge `606a530`）；Schema 88
 - Schema：89
 
