@@ -1666,6 +1666,21 @@ async def chat(body: ChatIn) -> StreamingResponse:
                 **final_payload,
             },
         )
+        if (
+            not body.regenerate
+            and not temporary_chat
+            and provider is not None
+            and provider.get("id") != "mock"
+            and task_planner.matches_planning_intent(effective_content)
+        ):
+            try:
+                proposal = await task_planner.generate_proposal(
+                    provider=provider, model=model, goal=effective_content[:200],
+                )
+                yield _sse("plan_proposal", proposal)
+            except Exception:  # noqa: BLE001 - 规划失败不能破坏已完成回复
+                logger.warning("plan_proposal_failed session_id=%s", body.session_id,
+                               exc_info=True)
 
     return StreamingResponse(gen(), media_type="text/event-stream")
 
