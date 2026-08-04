@@ -1,6 +1,6 @@
 # CYR.2B 合同闭合批次设计
 
-> 状态：已实现、通过本地工程门禁并形成独立本地提交；等待远端交付授权
+> 状态：已实现、通过本地工程门禁并随 CYR.2B UX 工作台于 2026-08-04 合入 `main` 收口
 > 决策日期：2026-08-02
 > 适用范围：TaskRun 并发合同、状态矩阵、幂等、计划批准边界、节点跳过证据
 > 前置基线：CYR.2A `e477bff`；CYR.2B revision 并发合同 `abdb463` / PR #4
@@ -30,7 +30,8 @@
 - 没有引入外部编排器、第二数据库、Xiaoda Agent 代码或新运行时依赖，也没有扩大 CYR.3 权限范围。
 - 2026-08-02 本地最终门禁：后端全量 `2752 passed`；合同/Schema 87/领域/HTTP 定向 `234 passed`；前端 `85 passed`；Electron 生命周期 `4 passed`；Vite build、Python `compileall` 与 `git diff --check` 通过。
 - 首轮全量后端曾因 CDS.9 已提交报告仍记 Schema 86 而出现 `1 failed, 2747 passed`；重新生成 CDS.9/CDS.10 schema 报告后，受影响固定集与全量后端均通过。提交前复核又补齐不存在对象优先返回 404、未知节点动作 422、无关证据字段清空，以及“不同命令竞争产生一次应用和一次 revision 409”的固定集；现存非阻塞提示仍为 Starlette/httpx 弃用、pytest cache 权限及 Live2D Classic Vite 提示。
-- 实现提交为 `dafa730`（`feat(taskrun): close CYR.2B mutation contracts`）；本记录随后以独立文档提交补记该 SHA。尚未推送或创建 PR，远端交付仍需新的明确授权。
+- 实现提交为 `dafa730`（`feat(taskrun): close CYR.2B mutation contracts`）；本记录随后以独立文档提交补记该 SHA。
+- UX 工作台提交 `519f574`（`feat(taskrun): complete CYR.2B UX workbench`）补齐多节点计划编辑、执行历史/再次执行与 body-free 事件 SSE；CYR.2B 于 2026-08-04 合入 `main` 收口，验收记录见 `docs/reports/cyr2b-closure-acceptance.md`。
 
 ## 2. 批次目标与非目标
 

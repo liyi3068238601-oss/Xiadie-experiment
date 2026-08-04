@@ -1,7 +1,7 @@
 # CYR.2 TaskRun 执行工作台施工计划
 
-> 状态：CYR.2A 与 CYR.2B 合同闭合批次已完成工程验证；多节点编辑、TaskRun SSE 与执行历史仍在 CYR.2B 后续
-> 最后更新：2026-08-02
+> 状态：CYR.2A 与 CYR.2B（合同闭合 + UX 工作台）已完成并合入 `main`（2026-08-04）；下一批次为 CYR.2C 单 Agent Planner 与恢复策略
+> 最后更新：2026-08-04
 > 当前批次设计：[CYR.2B 合同闭合批次设计](superpowers/specs/2026-08-02-cyr2b-contract-closure-design.md)
 > 适用范围：Task、TaskRun、TaskNode、恢复、任务台与执行审计
 > 前置基线：CYR.1/CYR.1S、LOG.1～LOG.5
@@ -193,16 +193,16 @@ CYR.2B 参考以下开源项目的协议和交互思想，但不直接复制代�
 - [x] 最小任务台状态与操作入口。
 - [x] 模块固定集与前端生产构建。
 
-### CYR.2B：计划编辑与并发合同（施工中）
+### CYR.2B：计划编辑与并发合同（已完成）
 
 - [x] `expected_revision` 可选乐观并发、409 当前快照与前端刷新恢复。
 - [x] 已实现冲突无写入和暂停/取消幂等首批固定集。
 - [x] API/领域层强制 CAS，纯合同内核覆盖完整 Run/Node 非法转换矩阵、精确语义幂等与统一 409。
 - [x] Schema 87 保存当前计划批准资格与节点跳过证据；批准只绑定当前 `plan_version`，不等于文件、网络或工具权限。
 - [x] `start`/`resume`、节点刷新、Task 投影和事件原子提交；精确重放与冲突固定集验证五类业务表零写入。
-- [ ] 结构化多节点计划编辑器、依赖可视化和验收条件编辑。
-- [ ] TaskRun 业务事件 SSE 状态更新。
-- [ ] 列出历史执行、失败原因与再次执行入口。
+- [x] 结构化多节点计划编辑器、依赖可视化和验收条件编辑。
+- [x] TaskRun 业务事件 SSE 状态更新（body-free、游标补齐与 gap 恢复）。
+- [x] 列出历史执行、失败原因与再次执行入口。
 
 ### CYR.2C：Agent Planner 与恢复策略
 
@@ -236,9 +236,10 @@ CYR.2 全阶段退出门：
 
 ## 11. 后续衔接
 
-CYR.2B 合同闭合批次已在 `agent/cyr2b-contract-closure` 完成实现与本地门禁：后端全量 `2752 passed`，TaskRun 合同/Schema/领域/HTTP 定向 `234 passed`，前端 `85 passed`，Electron 生命周期 `4 passed`，Python `compileall`、Vite 生产构建与 `git diff --check` 通过。现存提示只有 Starlette/httpx 弃用、pytest cache 权限和 Live2D Classic Vite 提示。
+CYR.2B（合同闭合 + UX 工作台）已于 2026-08-04 合入 `main` 收口，验收记录见 `docs/reports/cyr2b-closure-acceptance.md`。
 
-下一步依次推进多节点计划编辑、TaskRun SSE、执行历史与再次执行，再进入 CYR.2C Planner 与恢复策略。CYR.2 全阶段完成后才进入 CYR.3：建立 ToolRegistry、PermissionGuard、ConfirmationRequest 和正式 Artifact。ToolRun 已有权威状态机，CYR.3 的工具适配器必须复用它，并把 `task_run_id` 与当前节点绑定；任何插件或工具不得直接把节点写成成功。
-## CYR.2B-UX completion note (2026-08-04)
+下一批次为 CYR.2C：单 Agent Planner、来源引用、恢复策略与用户锁定节点。CYR.2 全阶段完成后才进入 CYR.3：建立 ToolRegistry、PermissionGuard、ConfirmationRequest 和正式 Artifact。ToolRun 已有权威状态机，CYR.3 的工具适配器必须复用它，并把 `task_run_id` 与当前节点绑定；任何插件或工具不得直接把节点写成成功。
 
-CYR.2B-UX is complete: the workbench now provides structured multi-node plan editing, dependency and completion-criteria editing, plan-approval boundary copy, node skip evidence, run history, and re-run. TaskRun business events have a body-free cursor catch-up endpoint and an authenticated SSE stream with explicit gap recovery. Agent Planner remains CYR.2C and tools/permissions remain CYR.3. Detailed contract: [CYR.2B-UX TaskRun workbench design](superpowers/specs/2026-08-04-cyr2b-ux-design.md).
+## CYR.2B closure note (2026-08-04)
+
+CYR.2B (contract closure + UX workbench) is complete and merged into `main`: the workbench provides structured multi-node plan editing, dependency and completion-criteria editing, plan-approval boundary copy, node skip evidence, run history, and re-run. TaskRun business events have a body-free cursor catch-up endpoint and an authenticated SSE stream with explicit gap recovery. Agent Planner remains CYR.2C and tools/permissions remain CYR.3. Detailed contract: [CYR.2B-UX TaskRun workbench design](superpowers/specs/2026-08-04-cyr2b-ux-design.md).
