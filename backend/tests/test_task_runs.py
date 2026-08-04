@@ -101,6 +101,52 @@ def test_invalidated_source_blocks_start() -> None:
     assert exc.value.code == "task_source_invalidated"
 
 
+def test_http_from_proposal_creates_task_and_draft() -> None:
+    from fastapi.testclient import TestClient
+    from app.main import app
+    client = TestClient(app)
+    headers = {"X-Xiadie-Token": "test-token-with-at-least-thirty-two-bytes"}
+    session = client.post("/api/sessions", json={}, headers=headers).json()
+    body = {
+        "goal_summary": "改进检索流程",
+        "requires_approval": True,
+        "source_session_id": session["id"],
+        "nodes": [{"client_id": "a", "title": "梳理流程", "depends_on": [],
+                   "completion_criteria": "输出清单",
+                   "input_refs": [{"source_kind": "knowledge_source", "source_id": _doc_source()}]}],
+    }
+    response = client.post("/api/task-runs/from-proposal", json=body, headers=headers)
+    assert response.status_code == 200, response.text
+    run = response.json()
+    assert run["status"] == "awaiting_approval"
+    assert run["nodes"][0]["source_links"][0]["source_kind"] == "knowledge_source"
+
+
+def test_http_from_proposal_rejects_invalid_plan() -> None:
+    from fastapi.testclient import TestClient
+    from app.main import app
+    client = TestClient(app)
+    headers = {"X-Xiadie-Token": "test-token-with-at-least-thirty-two-bytes"}
+    body = {
+        "goal_summary": "坏计划",
+        "nodes": [{"client_id": "a", "title": "A", "depends_on": ["b"]},
+                  {"client_id": "b", "title": "B", "depends_on": ["a"]}],
+    }
+    response = client.post("/api/task-runs/from-proposal", json=body, headers=headers)
+    assert response.status_code == 422
+
+
+def test_http_planner_proposal_mock_fails_closed() -> None:
+    from fastapi.testclient import TestClient
+    from app.main import app
+    client = TestClient(app)
+    headers = {"X-Xiadie-Token": "test-token-with-at-least-thirty-two-bytes"}
+    run = task_runs.create(task_id=_task(), idempotency_key="planner-1")
+    response = client.post(f"/api/task-runs/{run['id']}/planner-proposal",
+                           json={}, headers=headers)
+    assert response.status_code == 422
+
+
 BUSINESS_TABLES = (
     "tasks", "task_runs", "task_nodes", "task_run_events", "task_run_artifact_links",
 )
