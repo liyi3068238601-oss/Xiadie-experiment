@@ -7,6 +7,17 @@ import pytest
 from app import task_run_contract as contract
 
 
+def test_cyr2c_error_specs_present() -> None:
+    for code in (
+        "task_source_ref_unknown",
+        "task_source_ref_invalid",
+        "task_source_invalidated",
+        "task_plan_locked_node_modified",
+    ):
+        assert code in contract.ERROR_SPECS
+        assert contract.ERROR_SPECS[code].retry == "modify_then_retry"
+
+
 RUN_STATES = (
     "draft", "planning", "awaiting_approval", "ready", "running",
     "paused", "recovery_required", "failed", "completed", "cancelled",
