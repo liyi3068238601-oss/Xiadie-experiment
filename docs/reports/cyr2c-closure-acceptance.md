@@ -2,7 +2,7 @@
 
 - 批次：CYR.2C（Agent Planner / 锁定 / 来源引用 / 恢复协议与面板）
 - 日期：2026-08-04
-- 分支：`agent/cyr2c-planner-locking`（合入 `main` 的 merge SHA 见 git 历史）
+- 合入：`agent/cyr2c-planner-locking` → `main`（merge `d02f50f`）
 - 前置基线：CYR.2B 收口（main `f9bb3f0`，merge `e100182`）；Schema 87
 - Schema：88
 
