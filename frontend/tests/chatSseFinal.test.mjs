@@ -18,6 +18,16 @@ test("plan_proposal event dispatches to onPlanProposal", () => {
   assert.match(typedProtocol, /onPlanProposal/);
 });
 
+test("tool_permission_request event dispatches", () => {
+  const calls = [];
+  dispatchChatSseEvent("tool_permission_request", { tool_id: "workspace.write_file" }, {
+    onToolPermissionRequest: (r) => calls.push(r),
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].tool_id, "workspace.write_file");
+  assert.match(typedProtocol, /onToolPermissionRequest/);
+});
+
 test("authoritative final replaces streamed text before done", () => {
   let text = "";
   let done = null;

@@ -3,6 +3,7 @@ export interface ChatSseCallbacks {
   onDelta?: (text: string) => void;
   onError?: (message: string, hint: string) => void;
   onPlanProposal?: (proposal: any) => void;
+  onToolPermissionRequest?: (request: any) => void;
   onFinal?: (data: any) => void;
   onDone?: (data: any) => void;
   onPhase?: (phase: "retrieval" | "generation" | "persistence" | "completed") => void;
@@ -21,6 +22,7 @@ export function dispatchChatSseEvent(
   else if (event === "delta") callbacks.onDelta?.(data.text);
   else if (event === "error") callbacks.onError?.(data.message, data.hint);
   else if (event === "plan_proposal") callbacks.onPlanProposal?.(data);
+  else if (event === "tool_permission_request") callbacks.onToolPermissionRequest?.(data);
   else if (event === "final") {
     if (state) state.finalSeen = true;
     callbacks.onFinal?.(data);

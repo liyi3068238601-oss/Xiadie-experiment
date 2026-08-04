@@ -1613,6 +1613,36 @@ export interface TaskRunRecovery {
 }
 export const getTaskRunRecovery = (runId: string) =>
   j<TaskRunRecovery>(`/api/task-runs/${encodeURIComponent(runId)}/recovery`);
+export interface ToolPermissionRequest {
+  id: string;
+  session_id?: string | null;
+  tool_id: string;
+  target: string;
+  risk_level: string;
+  purpose: string;
+  grant_duration_seconds?: number | null;
+  status: "pending" | "confirmed" | "denied" | "expired";
+  task_run_id?: string | null;
+  node_id?: string | null;
+  created_at: number;
+  decided_at?: number | null;
+  confirmed_grant_id?: string | null;
+}
+export const confirmToolPermission = (requestId: string, grantDurationSeconds?: number) =>
+  j<ToolPermissionRequest>(
+    `/api/tool-permissions/requests/${encodeURIComponent(requestId)}/confirm`,
+    { method: "POST", body: JSON.stringify({ grant_duration_seconds: grantDurationSeconds }) },
+  );
+export const denyToolPermission = (requestId: string) =>
+  j<ToolPermissionRequest>(
+    `/api/tool-permissions/requests/${encodeURIComponent(requestId)}/deny`,
+    { method: "POST", body: JSON.stringify({}) },
+  );
+export const listPendingToolPermissions = (sessionId?: string) => {
+  const query = new URLSearchParams();
+  if (sessionId) query.set("session_id", sessionId);
+  return j<ToolPermissionRequest[]>(`/api/tool-permissions/requests?${query}`);
+};
 
 // ---- 模型 / 供应商 ----
 export const listProviders = () => j<Provider[]>("/api/providers");
@@ -1872,6 +1902,7 @@ export interface ChatCallbacks {
   }) => void;
   onDelta?: (text: string) => void;
   onPlanProposal?: (proposal: PlanProposal) => void;
+  onToolPermissionRequest?: (request: ToolPermissionRequest) => void;
   onFinal?: (d: {
     message_id: string;
     content: string;

@@ -68,6 +68,8 @@ const DEFAULT_PERSONA_STYLE: PersonaStyle = {
 export function ChatView({ sessionId, focusMessageId, onMode, companionCluster, onCompanionState, onSessionsChanged, onOpenTasks }: Props) {
   const [messages, setMessages] = useState<api.Message[]>([]);
   const [planProposal, setPlanProposal] = useState<api.PlanProposal | null>(null);
+  const [toolPermissionRequest, setToolPermissionRequest] =
+    useState<api.ToolPermissionRequest | null>(null);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState<Streaming | null>(null);
   const [errorCard, setErrorCard] = useState<{ msg: string; hint: string } | null>(null);
@@ -173,12 +175,14 @@ export function ChatView({ sessionId, focusMessageId, onMode, companionCluster, 
     if (!sessionId) {
       setMessages([]);
       setPlanProposal(null);
+      setToolPermissionRequest(null);
       return;
     }
     api.listMessages(sessionId).then(setMessages);
     setErrorCard(null);
     setMemoryNotice(null);
     setPlanProposal(null);
+    setToolPermissionRequest(null);
     setPendingGrant(null);
     setGrantBusy(false);
     memoryWatchId.current += 1;
@@ -489,6 +493,7 @@ export function ChatView({ sessionId, focusMessageId, onMode, companionCluster, 
       api.desktop?.setPetState?.("thinking", "让我想想…", companionCluster);
     }
     setPlanProposal(null);
+    setToolPermissionRequest(null);
 
     await api.streamChat(
       activeSessionId,
@@ -507,6 +512,9 @@ export function ChatView({ sessionId, focusMessageId, onMode, companionCluster, 
         },
         onPlanProposal: (proposal) => {
           if (activeInView()) setPlanProposal(proposal);
+        },
+        onToolPermissionRequest: (request) => {
+          if (activeInView()) setToolPermissionRequest(request);
         },
         onPhase: (phase) => {
           if (!activeInView()) return;
@@ -826,6 +834,21 @@ export function ChatView({ sessionId, focusMessageId, onMode, companionCluster, 
       toast((reason as Error)?.message || "创建任务草稿失败");
     }
   };
+  const decidePermission = async (confirm: boolean) => {
+    if (!toolPermissionRequest) return;
+    try {
+      if (confirm) {
+        await api.confirmToolPermission(toolPermissionRequest.id, 3600);
+        toast("已授权，可以继续执行。");
+      } else {
+        await api.denyToolPermission(toolPermissionRequest.id);
+        toast("已拒绝权限请求。");
+      }
+      setToolPermissionRequest(null);
+    } catch (reason) {
+      toast((reason as Error)?.message || "权限请求处理失败");
+    }
+  };
 
   return (
     <>
@@ -946,6 +969,30 @@ export function ChatView({ sessionId, focusMessageId, onMode, companionCluster, 
                   <button className="plan-ghost" onClick={() => setPlanProposal(null)}>取消</button>
                 </div>
                 <div className="plan-note">确认后创建任务草稿，不会自动开始执行</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {toolPermissionRequest && (
+          <div className="msg assistant">
+            <div className="avatar">蝶</div>
+            <div className="bubble">
+              <div className="plan-card">
+                <div className="plan-head">
+                  <span className="page-eyebrow">权限确认</span>
+                  <span className="task-run-status">等待确认</span>
+                </div>
+                <div className="plan-goal">工具 {toolPermissionRequest.tool_id}</div>
+                <div className="plan-stats">
+                  <span>目标：{toolPermissionRequest.target}</span>
+                  <span>风险：{toolPermissionRequest.risk_level}</span>
+                  <span>用途：{toolPermissionRequest.purpose || "未说明"}</span>
+                </div>
+                <div className="plan-actions">
+                  <button className="plan-primary" onClick={() => void decidePermission(true)}>确认</button>
+                  <button className="plan-ghost" onClick={() => void decidePermission(false)}>拒绝</button>
+                </div>
               </div>
             </div>
           </div>
