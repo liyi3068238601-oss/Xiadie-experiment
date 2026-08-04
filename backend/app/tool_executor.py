@@ -30,6 +30,16 @@ def _bounded_result(result: dict[str, Any]) -> dict[str, Any]:
     return {"summary": encoded[:4000] + "…（已截断）"}
 
 
+def _tool_target(manifest, args: dict[str, Any], workspace: Path) -> str:
+    if any(permission.get("kind") == "path_prefix"
+           for permission in manifest.declared_permissions) and isinstance(args.get("path"), str):
+        path = Path(args["path"])
+        if not path.is_absolute():
+            path = Path(workspace) / path
+        return str(path.resolve())
+    return str(args.get("path") or args.get("url") or "")
+
+
 def execute_node(run: dict, node: dict, *, session_id: str | None = None,
                  workspace: Path | None = None,
                  registry: ToolRegistry | None = None) -> dict:
@@ -53,6 +63,35 @@ def execute_node(run: dict, node: dict, *, session_id: str | None = None,
             running["id"], node["id"], "fail", expected_revision=running["revision"],
             error_code="tool_not_found", error_message="工具未注册或参数无效",
         )
+    from . import confirmation, permission_guard
+    workspace_root = workspace or default_workspace()
+    target = _tool_target(manifest, args, workspace_root)
+    decision = permission_guard.check(manifest, target=target, session_id=session_id,
+                                      workspace=workspace_root)
+    if decision == "needs_confirmation":
+        confirmation.create_request(
+            session_id=session_id, tool_id=tool_ref, target=target,
+            risk_level=manifest.risk_level, purpose="工具执行需要确认",
+            task_run_id=run["id"], node_id=node["id"],
+        )
+        tool_run = tool_runs.create(
+            tool_name=tool_ref, trace_id=run["trace_id"], session_id=session_id,
+            task_run_id=run["id"], risk_level=manifest.risk_level,
+            arguments_summary=args,
+        )
+        tool_runs.transition(tool_run["id"], "authorizing")
+        return running  # 节点保持 running，等待确认
+    if decision == "denied":
+        tool_run = tool_runs.create(
+            tool_name=tool_ref, trace_id=run["trace_id"], session_id=session_id,
+            task_run_id=run["id"], risk_level=manifest.risk_level,
+            arguments_summary=args,
+        )
+        tool_runs.transition(tool_run["id"], "denied", cancellation_reason="权限被拒绝或已撤销")
+        return task_runs.transition_node(
+            running["id"], node["id"], "fail", expected_revision=running["revision"],
+            error_code="permission_denied", error_message="缺少或已撤销权限",
+        )
     tool_run = tool_runs.create(
         tool_name=tool_ref, trace_id=run["trace_id"], session_id=session_id,
         task_run_id=run["id"], risk_level=manifest.risk_level,
@@ -61,7 +100,7 @@ def execute_node(run: dict, node: dict, *, session_id: str | None = None,
     tool_runs.transition(tool_run["id"], "authorizing")
     tool_runs.transition(tool_run["id"], "running")
     try:
-        result = reg.handler_for(tool_ref)(args, workspace=workspace or default_workspace())
+        result = reg.handler_for(tool_ref)(args, workspace=workspace_root)
     except ToolExecutionError as exc:
         tool_runs.transition(tool_run["id"], "failed", error=exc, error_code=exc.code)
         return task_runs.transition_node(

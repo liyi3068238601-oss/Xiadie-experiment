@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import re
 from pathlib import Path
 from typing import Any, Callable
@@ -184,3 +185,33 @@ def register_default_tools(registry: ToolRegistry) -> None:
         output_schema={}, side_effect=False, risk_level="S0",
         declared_permissions=[{"kind": "path_prefix", "target": "workspace/"}],
     ), code_inspect())
+    registry.register(ToolManifest(
+        id="workspace.write_file", name="写入文件", description="工作区内受限写入（需确认）",
+        input_schema={"type": "object",
+                      "properties": {
+                          "path": {"type": "string", "maxLength": 400},
+                          "content": {"type": "string", "maxLength": 100000},
+                      },
+                      "required": ["path", "content"]},
+        output_schema={}, side_effect=True, risk_level="S2",
+        declared_permissions=[{"kind": "path_prefix", "target": "workspace/"}],
+    ), write_file())
+
+
+def write_file() -> Handler:
+    def handler(args: dict[str, Any], *, workspace) -> dict[str, Any]:
+        path = _resolve_workspace_path(workspace, args["path"])
+        if len(str(args["content"])) > 100000:
+            raise ToolExecutionError("content_too_large", "写入内容超过 100KB 上限")
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(str(args["content"]), encoding="utf-8")
+        except OSError as exc:
+            raise ToolExecutionError("write_failed", "文件写入失败") from exc
+        return {
+            "path": str(path.relative_to(Path(workspace).resolve())),
+            "size": path.stat().st_size,
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        }
+
+    return handler
