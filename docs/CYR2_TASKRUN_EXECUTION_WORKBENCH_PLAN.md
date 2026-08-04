@@ -239,3 +239,6 @@ CYR.2 全阶段退出门：
 CYR.2B 合同闭合批次已在 `agent/cyr2b-contract-closure` 完成实现与本地门禁：后端全量 `2752 passed`，TaskRun 合同/Schema/领域/HTTP 定向 `234 passed`，前端 `85 passed`，Electron 生命周期 `4 passed`，Python `compileall`、Vite 生产构建与 `git diff --check` 通过。现存提示只有 Starlette/httpx 弃用、pytest cache 权限和 Live2D Classic Vite 提示。
 
 下一步依次推进多节点计划编辑、TaskRun SSE、执行历史与再次执行，再进入 CYR.2C Planner 与恢复策略。CYR.2 全阶段完成后才进入 CYR.3：建立 ToolRegistry、PermissionGuard、ConfirmationRequest 和正式 Artifact。ToolRun 已有权威状态机，CYR.3 的工具适配器必须复用它，并把 `task_run_id` 与当前节点绑定；任何插件或工具不得直接把节点写成成功。
+## CYR.2B-UX completion note (2026-08-04)
+
+CYR.2B-UX is complete: the workbench now provides structured multi-node plan editing, dependency and completion-criteria editing, plan-approval boundary copy, node skip evidence, run history, and re-run. TaskRun business events have a body-free cursor catch-up endpoint and an authenticated SSE stream with explicit gap recovery. Agent Planner remains CYR.2C and tools/permissions remain CYR.3. Detailed contract: [CYR.2B-UX TaskRun workbench design](superpowers/specs/2026-08-04-cyr2b-ux-design.md).

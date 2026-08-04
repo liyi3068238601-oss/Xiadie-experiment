@@ -889,6 +889,18 @@ export interface TaskNode {
   skip_reason_code?: string | null;
   skip_reason_summary?: string | null;
 }
+export interface TaskRunEvent {
+  id: string;
+  task_run_id: string;
+  node_id?: string | null;
+  event_type: string;
+  from_status?: TaskRunStatus | null;
+  to_status?: TaskRunStatus | null;
+  revision: number;
+  reason_code?: string | null;
+  metadata: Record<string, unknown>;
+  created_at: number;
+}
 export interface TaskRun {
   id: string;
   task_id: string;
@@ -907,7 +919,7 @@ export interface TaskRun {
   error_code?: string | null;
   error_message?: string | null;
   nodes?: TaskNode[];
-  events?: Array<Record<string, unknown>>;
+  events?: TaskRunEvent[];
   artifacts?: Array<Record<string, unknown>>;
   tool_runs?: Array<Record<string, unknown>>;
   created_at: number;
@@ -1452,6 +1464,46 @@ export const createTaskRun = (taskId: string, goalSummary = "") =>
     method: "POST", body: JSON.stringify({ goal_summary: goalSummary }),
   });
 export const getTaskRun = (runId: string) => j<TaskRun>(`/api/task-runs/${runId}`);
+export const listTaskRunEvents = (runId: string, after?: string, limit = 200) => {
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (after) query.set("after", after);
+  return j<{ events: TaskRunEvent[]; cursor: string | null; gap: boolean }>(
+    `/api/task-runs/${encodeURIComponent(runId)}/events?${query}`,
+  );
+};
+export async function streamTaskRunEvents(
+  runId: string,
+  after: string | undefined,
+  onEvent: (event: "ready" | "gap" | "task_run_event", data: Record<string, unknown>) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const query = new URLSearchParams();
+  if (after) query.set("after", after);
+  const response = await fetch(
+    `${API_BASE}/api/task-runs/${encodeURIComponent(runId)}/events/stream?${query}`,
+    { headers: requestHeaders(), signal },
+  );
+  if (!response.ok || !response.body) throw new ApiError(response.status, response.statusText);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return;
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split("\n\n");
+    buffer = blocks.pop() || "";
+    for (const block of blocks) {
+      const eventLine = block.split("\n").find((line) => line.startsWith("event:"));
+      const dataLine = block.split("\n").find((line) => line.startsWith("data:"));
+      if (!eventLine || !dataLine) continue;
+      const event = eventLine.slice(6).trim();
+      if (event === "ready" || event === "gap" || event === "task_run_event") {
+        onEvent(event, JSON.parse(dataLine.slice(5).trim()) as Record<string, unknown>);
+      }
+    }
+  }
+}
 export const replaceTaskRunPlan = (
   runId: string,
   nodes: Array<{ client_id: string; title: string; depends_on?: string[]; completion_criteria?: string }>,

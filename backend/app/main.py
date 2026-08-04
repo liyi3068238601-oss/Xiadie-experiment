@@ -3,6 +3,7 @@
 分层职责（需求第 10 节）：模型、会话、任务、记忆、工具，均保存在本地 SQLite。
 不做多窗口调度、不推倒重写。此文件只负责 HTTP 接口与编排。
 """
+import asyncio
 import hashlib
 import json
 import logging
@@ -3466,6 +3467,55 @@ def get_task_run(run_id: str) -> dict:
     if result is None:
         raise HTTPException(404, "task_run_not_found")
     return result
+
+
+@app.get("/api/task-runs/{run_id}/events")
+def get_task_run_events(run_id: str, after: Optional[str] = None,
+                        limit: int = 200) -> dict:
+    """Bounded TaskRun business-event catch-up for reconnecting workbenches."""
+    try:
+        return task_runs.list_events(run_id, after=after, limit=limit)
+    except task_runs.TaskRunError as error:
+        raise HTTPException(404, str(error)) from error
+
+
+@app.get("/api/task-runs/{run_id}/events/stream")
+async def stream_task_run_events(run_id: str, request: Request,
+                                 after: Optional[str] = None) -> StreamingResponse:
+    """SSE projection of TaskRun events; snapshots remain on the ordinary GET route."""
+    def encode(event: str, payload: dict, event_id: str | None = None) -> str:
+        prefix = f"id: {event_id}\n" if event_id else ""
+        return f"{prefix}event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+    try:
+        initial = task_runs.list_events(run_id, after=after)
+    except task_runs.TaskRunError as error:
+        raise HTTPException(404, str(error)) from error
+
+    async def generate():
+        cursor = after
+        if initial["gap"]:
+            yield encode("gap", {"run_id": run_id, "cursor": after})
+            return
+        yield encode("ready", {"run_id": run_id, "cursor": initial["cursor"]})
+        for item in initial["events"]:
+            cursor = item["id"]
+            yield encode("task_run_event", item, item["id"])
+        while not await request.is_disconnected():
+            await asyncio.sleep(0.75)
+            update = task_runs.list_events(run_id, after=cursor)
+            if update["gap"]:
+                yield encode("gap", {"run_id": run_id, "cursor": cursor})
+                return
+            for item in update["events"]:
+                cursor = item["id"]
+                yield encode("task_run_event", item, item["id"])
+            if not update["events"]:
+                yield ": heartbeat\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream", headers={
+        "Cache-Control": "no-cache", "X-Accel-Buffering": "no",
+    })
 
 
 @app.put("/api/task-runs/{run_id}/plan")

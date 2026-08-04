@@ -472,3 +472,6 @@ CYR.1S 已开始补齐退场前置设施：逐资源启动自检、body-free 失
 - 每项退场都要有数量对账、抽样内容核对、失败回滚、备份恢复、隐私删除传播和启动器升级测试。
 
 任何退场提交都必须同时更新 README、本路线、迁移文档和测试，并在诊断日志中保留足以解释升级失败的版本信息。
+## CYR.2B-UX completion baseline (2026-08-04)
+
+CYR.2B now includes the user-facing execution workbench: editable DAG plans, history/re-run, and a TaskRun-specific body-free event SSE with cursor gap recovery. It does not add another agent, convert plan approval into tool permission, or introduce background execution. The next boundary is CYR.2C Agent Planner and recovery strategy; CYR.3 remains responsible for ToolRegistry, grants, and confirmations.

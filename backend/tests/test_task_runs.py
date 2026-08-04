@@ -81,6 +81,35 @@ def test_create_is_idempotent_and_plan_rejects_cycles():
         ], expected_revision=first["revision"])
 
 
+def test_event_cursor_catchup_is_body_free_and_detects_unknown_cursor():
+    run = _planned_run()
+    first = task_runs.list_events(run["id"])
+    assert first["gap"] is False
+    assert first["events"]
+    assert first["cursor"] == first["events"][-1]["id"]
+    assert all("metadata_json" not in event for event in first["events"])
+    assert all("goal_summary" not in event and "title" not in event for event in first["events"])
+
+    started = task_runs.start(run["id"], expected_revision=run["revision"])
+    catchup = task_runs.list_events(run["id"], after=first["cursor"])
+    assert catchup["gap"] is False
+    assert [event["event_type"] for event in catchup["events"]] == ["task_run_started"]
+    assert catchup["events"][0]["revision"] == started["revision"]
+    assert task_runs.list_events(run["id"], after="missing-cursor")["gap"] is True
+
+
+def test_http_event_catchup_endpoint_exposes_cursor_and_body_free_events():
+    client, headers = _http_client()
+    run = _http_run(client, headers)
+    response = client.get(f"/api/task-runs/{run['id']}/events", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["gap"] is False
+    assert payload["cursor"] == payload["events"][-1]["id"]
+    assert all("metadata_json" not in event for event in payload["events"])
+    assert client.get(f"/api/task-runs/{run['id']}/events?after=bad", headers=headers).json()["gap"] is True
+
+
 def test_node_evidence_drives_progress_and_completion():
     run = _planned_run()
     assert run["status"] == "ready"

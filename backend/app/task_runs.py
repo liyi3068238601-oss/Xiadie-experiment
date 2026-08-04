@@ -59,6 +59,16 @@ def _decode_node(row: Any) -> dict[str, Any]:
     return item
 
 
+def _decode_event(row: Any) -> dict[str, Any]:
+    """Return the body-free, client-safe representation of a TaskRun event."""
+    item = dict(row)
+    try:
+        item["metadata"] = json.loads(item.pop("metadata_json"))
+    except (TypeError, ValueError):
+        item["metadata"] = {}
+    return item
+
+
 def _event(conn, run_id: str, event_type: str, *, node_id: str | None = None,
            from_status: str | None = None, to_status: str | None = None,
            revision: int, reason_code: str | None = None,
@@ -152,6 +162,45 @@ def list_for_task(task_id: str) -> list[dict[str, Any]]:
         conn.close()
 
 
+def list_events(run_id: str, *, after: str | None = None, limit: int = 200) -> dict[str, Any]:
+    """Read a bounded, cursor-addressable event history without changing state.
+
+    Event ids are opaque, so the cursor is resolved to its durable
+    ``(created_at, id)`` ordering pair.  An unknown cursor is explicitly a
+    gap: callers must refresh the authoritative TaskRun snapshot instead of
+    guessing at a missed transition.
+    """
+    requested_limit = min(max(int(limit), 1), 500)
+    conn = db.connect()
+    try:
+        if conn.execute("SELECT 1 FROM task_runs WHERE id=?", (run_id,)).fetchone() is None:
+            raise TaskRunError("task_run_not_found")
+        cursor = None
+        if after:
+            cursor = conn.execute(
+                "SELECT id,created_at FROM task_run_events WHERE task_run_id=? AND id=?",
+                (run_id, after),
+            ).fetchone()
+            if cursor is None:
+                return {"events": [], "cursor": after, "gap": True}
+        if cursor is None:
+            rows = conn.execute(
+                "SELECT * FROM task_run_events WHERE task_run_id=? ORDER BY created_at,id LIMIT ?",
+                (run_id, requested_limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM task_run_events WHERE task_run_id=? "
+                "AND (created_at>? OR (created_at=? AND id>?)) "
+                "ORDER BY created_at,id LIMIT ?",
+                (run_id, cursor["created_at"], cursor["created_at"], cursor["id"], requested_limit),
+            ).fetchall()
+        events = [_decode_event(row) for row in rows]
+        return {"events": events, "cursor": events[-1]["id"] if events else (after or None), "gap": False}
+    finally:
+        conn.close()
+
+
 def get(run_id: str) -> dict[str, Any] | None:
     conn = db.connect()
     try:
@@ -162,14 +211,9 @@ def get(run_id: str) -> dict[str, Any] | None:
         result["nodes"] = [_decode_node(item) for item in conn.execute(
             "SELECT * FROM task_nodes WHERE task_run_id=? ORDER BY position,id", (run_id,),
         ).fetchall()]
-        result["events"] = [dict(item) for item in conn.execute(
+        result["events"] = [_decode_event(item) for item in conn.execute(
             "SELECT * FROM task_run_events WHERE task_run_id=? ORDER BY created_at,id", (run_id,),
         ).fetchall()]
-        for event in result["events"]:
-            try:
-                event["metadata"] = json.loads(event.pop("metadata_json"))
-            except (TypeError, ValueError):
-                event["metadata"] = {}
         result["artifacts"] = [dict(item) for item in conn.execute(
             "SELECT * FROM task_run_artifact_links WHERE task_run_id=? ORDER BY created_at,id", (run_id,),
         ).fetchall()]

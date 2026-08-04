@@ -335,3 +335,4 @@ npm.cmd run build
 ## 许可证
 
 项目代码遵循仓库 [LICENSE](LICENSE)。第三方模型、Live2D、字体、KFC 参考包和其他资产分别受其原许可证约束；源码级复用前必须确认兼容性和再分发权。
+> CYR.2B-UX (2026-08-04): TaskRun now includes editable multi-node plans, dependencies, completion criteria, plan-approval boundary copy, skip evidence, execution history, re-run, and a separate body-free cursor SSE stream. Agent planning remains CYR.2C; tool permissions remain CYR.3.
