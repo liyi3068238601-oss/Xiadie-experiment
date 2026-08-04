@@ -4,17 +4,19 @@
 不做多窗口调度、不推倒重写。此文件只负责 HTTP 接口与编排。
 """
 import asyncio
+import base64
 import hashlib
 import json
 import logging
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Literal, Optional
 from urllib.parse import unquote
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from .observability import bind_context, configure_observability, log_event, new_trace_id
@@ -33,7 +35,8 @@ from . import (
     knowledge_embeddings, knowledge_grants,
     knowledge_management, knowledge_parser, knowledge_policy, knowledge_recall, knowledge_recall_service, knowledge_search,
     knowledge_worker, kig_evidence, kig_governance, kig_maintenance, kig_pipeline, kig_sources, llm, lore, memory, memory_conflicts, memory_shadow_proposals,
-    chat_tool_ingress, confirmation, persona, persona_output_guard, persona_v2, runtime_logs, short_memo,
+    artifacts, chat_tool_ingress, confirmation, persona, persona_output_guard, persona_v2,
+    runtime_logs, short_memo,
     task_planner,
     task_runs, tool_executor, worldbook_r1,
     saga_consolidator, saga_lifecycle, saga_summary,
@@ -3423,6 +3426,15 @@ class ToolPermissionDecisionIn(BaseModel):
     grant_duration_seconds: Optional[int] = Field(default=None, ge=60, le=86400)
 
 
+class ArtifactCreateIn(BaseModel):
+    task_run_id: str = Field(min_length=1, max_length=120)
+    node_id: Optional[str] = None
+    artifact_id: Optional[str] = Field(default=None, max_length=120)
+    artifact_kind: Literal["text", "markdown", "image", "pdf", "data"]
+    mime_type: str = Field(min_length=1, max_length=120)
+    data_b64: str
+
+
 class TaskPlanIn(BaseModel):
     nodes: list[TaskPlanNodeIn] = Field(min_length=1, max_length=50)
     requires_approval: bool = False
@@ -3778,6 +3790,59 @@ def deny_tool_permission(request_id: str) -> dict:
         return confirmation.deny(request_id)
     except KeyError:
         raise HTTPException(404, "confirmation_request_not_found")
+
+
+@app.get("/api/artifacts")
+def list_artifacts(run_id: str) -> list[dict]:
+    return artifacts.list(run_id)
+
+
+@app.post("/api/artifacts")
+def create_artifact(body: ArtifactCreateIn) -> dict:
+    try:
+        data = base64.b64decode(body.data_b64)
+    except Exception:  # noqa: BLE001 - Base64 解码失败
+        raise HTTPException(422, "data_b64 不是有效 Base64")
+    try:
+        return artifacts.create_version(
+            task_run_id=body.task_run_id, node_id=body.node_id,
+            artifact_id=body.artifact_id or db.new_id(),
+            kind=body.artifact_kind, mime=body.mime_type, data=data,
+            workspace=Path(db.DATA_DIR),
+        )
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+
+
+@app.post("/api/artifacts/{artifact_id}/rollback")
+def rollback_artifact(artifact_id: str) -> dict:
+    try:
+        return artifacts.rollback(artifact_id)
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+
+
+@app.delete("/api/artifacts/{artifact_id}")
+def delete_artifact(artifact_id: str) -> dict:
+    artifacts.soft_delete(artifact_id)
+    return {"ok": True}
+
+
+@app.post("/api/artifacts/{artifact_id}/purge")
+def purge_artifact(artifact_id: str) -> dict:
+    artifacts.purge(artifact_id)
+    return {"ok": True}
+
+
+@app.get("/api/artifacts/{artifact_id}/preview")
+def preview_artifact(artifact_id: str) -> Response:
+    try:
+        data = artifacts.preview(artifact_id)
+    except KeyError:
+        raise HTTPException(404, "artifact_not_found")
+    item = artifacts.active(artifact_id)
+    mime = (item or {}).get("mime_type") or "application/octet-stream"
+    return Response(content=data, media_type=mime)
 
 
 # ---------------------------------------------------------------- 供应商 / 模型

@@ -1643,6 +1643,37 @@ export const listPendingToolPermissions = (sessionId?: string) => {
   if (sessionId) query.set("session_id", sessionId);
   return j<ToolPermissionRequest[]>(`/api/tool-permissions/requests?${query}`);
 };
+export interface ArtifactRecord {
+  id: string;
+  artifact_id: string;
+  task_run_id?: string | null;
+  node_id?: string | null;
+  artifact_kind: "text" | "markdown" | "image" | "pdf" | "data";
+  mime_type: string;
+  size_bytes: number;
+  sha256: string;
+  version: number;
+  status: string;
+  versions?: Array<{ version: number; status: string; size_bytes: number; sha256: string }>;
+  created_at: number;
+  updated_at: number;
+}
+export const listArtifacts = (runId: string) =>
+  j<ArtifactRecord[]>(`/api/artifacts?run_id=${encodeURIComponent(runId)}`);
+export const rollbackArtifact = (artifactId: string) =>
+  j<ArtifactRecord>(`/api/artifacts/${encodeURIComponent(artifactId)}/rollback`, {
+    method: "POST", body: JSON.stringify({}),
+  });
+export const deleteArtifact = (artifactId: string) =>
+  j<{ ok: boolean }>(`/api/artifacts/${encodeURIComponent(artifactId)}`, { method: "DELETE" });
+export const getArtifactPreview = async (artifactId: string): Promise<Blob> => {
+  const response = await fetch(
+    `${API_BASE}/api/artifacts/${encodeURIComponent(artifactId)}/preview`,
+    { headers: requestHeaders() },
+  );
+  if (!response.ok) throw new ApiError(response.status, response.statusText);
+  return response.blob();
+};
 
 // ---- 模型 / 供应商 ----
 export const listProviders = () => j<Provider[]>("/api/providers");

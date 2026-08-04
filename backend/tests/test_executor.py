@@ -109,3 +109,6 @@ def test_write_with_grant_succeeds(tmp_path) -> None:
     result = execute_node(started, node, session_id=session_id, workspace=tmp_path)
     assert (tmp_path / "out.txt").read_text(encoding="utf-8") == "x"
     assert result["nodes"][0]["status"] == "succeeded"
+    from app import artifacts
+    listing = artifacts.list(result["id"])
+    assert any(item["artifact_id"] == "out.txt" for item in listing)

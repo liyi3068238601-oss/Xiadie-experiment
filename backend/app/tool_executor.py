@@ -114,6 +114,20 @@ def execute_node(run: dict, node: dict, *, session_id: str | None = None,
             error_code="tool_execution_error", error_message="工具执行失败（已脱敏）",
         )
     bounded = _bounded_result(result)
+    if manifest.side_effect and result.get("path"):
+        try:
+            from . import artifacts as artifact_store
+            source = workspace_root / result["path"]
+            artifact_store.create_version(
+                task_run_id=run["id"], node_id=node["id"],
+                artifact_id=result["path"], kind="text", mime="text/plain",
+                data=source.read_bytes(), workspace=workspace_root,
+            )
+        except Exception as exc:  # noqa: BLE001 - 工具已成功；产物记录失败留证据日志
+            from .observability import log_event
+            log_event("tool.artifact", "WARNING", "artifact_record_failed",
+                      "artifact record failed",
+                      fields={"tool": tool_ref, "error": str(exc)[:200]})
     tool_runs.transition(tool_run["id"], "succeeded", result_summary=bounded)
     summary = str(bounded.get("summary") or bounded)[:500]
     return task_runs.transition_node(

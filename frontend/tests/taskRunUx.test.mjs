@@ -63,3 +63,11 @@ test("CYR.3 tool permission api is wired", () => {
   assert.match(api, /ToolPermissionRequest/);
   assert.match(api, /tool-permissions\/requests/);
 });
+
+test("CYR.3 artifact section is wired in the workbench", () => {
+  assert.match(api, /listArtifacts/);
+  assert.match(api, /rollbackArtifact/);
+  assert.match(tasks, /run-artifacts/);
+  assert.match(tasks, /ArtifactViewer/);
+  assert.match(tasks, /artifactKindLabel/);
+});
