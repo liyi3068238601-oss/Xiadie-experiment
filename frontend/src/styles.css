@@ -3298,6 +3298,110 @@ input[type="range"].xd-range::-moz-range-thumb { width: 20px; height: 20px; bord
   gap: 8px;
   margin: 14px 0;
 }
+
+/* CYR.2C 聊天候选计划卡（UI 设计 v0.2） */
+.plan-card {
+  display: grid;
+  gap: 9px;
+  width: min(480px, 100%);
+  padding: 14px 15px 12px;
+  border: 1px solid rgba(157, 132, 255, 0.3);
+  border-left: 3px solid var(--violet);
+  border-radius: 16px;
+  color: #dcd6ec;
+  background:
+    radial-gradient(circle at 95% 0, rgba(69, 199, 255, 0.08), transparent 32%),
+    linear-gradient(145deg, rgba(38, 25, 70, 0.97), rgba(20, 14, 42, 0.97));
+  box-shadow: 0 18px 50px rgba(5, 3, 18, 0.36), inset 0 1px rgba(255, 255, 255, 0.04);
+}
+.plan-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.plan-goal {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1edfb;
+}
+.plan-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+  color: var(--text-faint);
+  font-size: 9px;
+}
+.plan-stats b {
+  color: var(--violet-soft);
+}
+.plan-nodes {
+  list-style: none;
+  display: grid;
+  gap: 5px;
+}
+.plan-nodes li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 7px 9px;
+  border: 1px solid rgba(157, 132, 255, 0.13);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.node-idx {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--violet-soft);
+  background: rgba(124, 92, 255, 0.16);
+  font-size: 9px;
+}
+.plan-nodes strong {
+  font-size: 11px;
+  color: #dcd6e9;
+}
+.plan-nodes small {
+  color: var(--text-faint);
+  font-size: 9px;
+}
+.plan-nodes small.dep {
+  color: #b7a9ea;
+}
+.more-nodes {
+  justify-self: start;
+  color: var(--violet-soft);
+  font-size: 10px;
+}
+.plan-actions {
+  display: flex;
+  gap: 8px;
+}
+.plan-primary {
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  background: linear-gradient(135deg, var(--violet), var(--indigo));
+  box-shadow: 0 0 16px rgba(124, 92, 255, 0.3);
+}
+.plan-ghost {
+  padding: 8px 14px;
+  border: 1px solid var(--glass-border-lit);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.plan-ghost:hover {
+  color: #e5dff4;
+}
+.plan-note {
+  color: var(--text-faint);
+  font-size: 9px;
+}
 .context-diagnostic-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

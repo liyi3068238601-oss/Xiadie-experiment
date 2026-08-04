@@ -67,6 +67,7 @@ const DEFAULT_PERSONA_STYLE: PersonaStyle = {
 
 export function ChatView({ sessionId, focusMessageId, onMode, companionCluster, onCompanionState, onSessionsChanged, onOpenTasks }: Props) {
   const [messages, setMessages] = useState<api.Message[]>([]);
+  const [planProposal, setPlanProposal] = useState<api.PlanProposal | null>(null);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState<Streaming | null>(null);
   const [errorCard, setErrorCard] = useState<{ msg: string; hint: string } | null>(null);
@@ -171,11 +172,13 @@ export function ChatView({ sessionId, focusMessageId, onMode, companionCluster, 
     }
     if (!sessionId) {
       setMessages([]);
+      setPlanProposal(null);
       return;
     }
     api.listMessages(sessionId).then(setMessages);
     setErrorCard(null);
     setMemoryNotice(null);
+    setPlanProposal(null);
     setPendingGrant(null);
     setGrantBusy(false);
     memoryWatchId.current += 1;
@@ -462,11 +465,11 @@ export function ChatView({ sessionId, focusMessageId, onMode, companionCluster, 
       sessionId: activeSessionId,
     } : null;
     if (requestControl) activeRequestRef.current = requestControl;
-    const clearActiveRequest = () => {
-      if (requestControl && activeRequestRef.current?.cancelToken === requestControl.cancelToken) {
-        activeRequestRef.current = null;
-      }
-    };
+  const clearActiveRequest = () => {
+    if (requestControl && activeRequestRef.current?.cancelToken === requestControl.cancelToken) {
+      activeRequestRef.current = null;
+    }
+  };
     // 本地立即显示用户消息（含附件卡片），不等后端刷新。只展示 ready 的附件
     const readyForLocal = !regenerate
       ? pendingAttachments.filter(
@@ -485,6 +488,7 @@ export function ChatView({ sessionId, focusMessageId, onMode, companionCluster, 
       onMode("thinking");
       api.desktop?.setPetState?.("thinking", "让我想想…", companionCluster);
     }
+    setPlanProposal(null);
 
     await api.streamChat(
       activeSessionId,
@@ -500,6 +504,9 @@ export function ChatView({ sessionId, focusMessageId, onMode, companionCluster, 
           if (presentation) presentation.finish(final.content);
           setStreaming({ text: final.content, phase: "completed" });
           if (replyPresentationRef.current === presentation) replyPresentationRef.current = null;
+        },
+        onPlanProposal: (proposal) => {
+          if (activeInView()) setPlanProposal(proposal);
         },
         onPhase: (phase) => {
           if (!activeInView()) return;
@@ -809,6 +816,17 @@ export function ChatView({ sessionId, focusMessageId, onMode, companionCluster, 
     toast("已从本次对话创建任务");
   }
 
+  const enterWorkbench = async (proposal: api.PlanProposal) => {
+    try {
+      const run = await api.createTaskRunFromProposal(proposal, sessionId ?? undefined);
+      setPlanProposal(null);
+      toast("已建立任务草稿，请在工作台确认计划。");
+      onOpenTasks();
+    } catch (reason) {
+      toast((reason as Error)?.message || "创建任务草稿失败");
+    }
+  };
+
   return (
     <>
       <div className="messages" ref={scrollRef}>
@@ -884,6 +902,51 @@ export function ChatView({ sessionId, focusMessageId, onMode, companionCluster, 
             <div>
               <div>{memoryNotice}</div>
               <small>可以在「记忆与关系」中查看、纠正或删除</small>
+            </div>
+          </div>
+        )}
+
+        {planProposal && (
+          <div className="msg assistant">
+            <div className="avatar">蝶</div>
+            <div className="bubble">
+              <div className="plan-card">
+                <div className="plan-head">
+                  <span className="page-eyebrow">候选计划</span>
+                  <span className="task-run-status">待确认</span>
+                </div>
+                <div className="plan-goal">{planProposal.goal_summary}</div>
+                <div className="plan-stats">
+                  <span><b>{planProposal.nodes.length}</b> 步骤</span>
+                  <span><b>{planProposal.nodes.filter((n) => (n.depends_on || []).length).length}</b> 依赖</span>
+                  <span><b>{planProposal.nodes.reduce((sum, n) => sum + (n.input_refs?.length || 0), 0)}</b> 来源</span>
+                  <span>{planProposal.requires_approval ? "需批准" : "无需批准"}</span>
+                </div>
+                <ol className="plan-nodes">
+                  {planProposal.nodes.slice(0, 3).map((node, index) => (
+                    <li key={node.client_id}>
+                      <span className="node-idx">{index + 1}</span>
+                      <div>
+                        <strong>{node.title}</strong>
+                        {(node.depends_on || []).length > 0 && (
+                          <small className="dep">← 依赖 {(node.depends_on || []).map((dep) =>
+                            planProposal.nodes.findIndex((n) => n.client_id === dep) + 1).join("、")}</small>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+                {planProposal.nodes.length > 3 && (
+                  <button className="more-nodes">+{planProposal.nodes.length - 3} 更多</button>
+                )}
+                <div className="plan-actions">
+                  <button className="plan-primary" onClick={() => void enterWorkbench(planProposal)}>
+                    进入工作台编辑
+                  </button>
+                  <button className="plan-ghost" onClick={() => setPlanProposal(null)}>取消</button>
+                </div>
+                <div className="plan-note">确认后创建任务草稿，不会自动开始执行</div>
+              </div>
             </div>
           </div>
         )}
