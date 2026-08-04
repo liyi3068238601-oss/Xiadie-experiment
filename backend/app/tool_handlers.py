@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import knowledge_parser
+from .tool_registry import ToolManifest, ToolRegistry
 
 MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_FILE_LINES = 20_000
@@ -138,3 +139,48 @@ def code_inspect() -> Handler:
                 "lines": len(source.splitlines())}
 
     return handler
+
+
+def register_default_tools(registry: ToolRegistry) -> None:
+    registry.register(ToolManifest(
+        id="workspace.read_file", name="读取文件", description="读取工作区内文本文件（有界）",
+        input_schema={"type": "object",
+                      "properties": {"path": {"type": "string", "maxLength": 400}},
+                      "required": ["path"]},
+        output_schema={}, side_effect=False, risk_level="S0",
+        declared_permissions=[{"kind": "path_prefix", "target": "workspace/"}],
+    ), read_file())
+    registry.register(ToolManifest(
+        id="workspace.search", name="搜索文本", description="在工作区内搜索文本",
+        input_schema={"type": "object",
+                      "properties": {
+                          "query": {"type": "string", "minLength": 1, "maxLength": 200},
+                          "case_insensitive": {"type": "boolean"},
+                      },
+                      "required": ["query"]},
+        output_schema={}, side_effect=False, risk_level="S0",
+        declared_permissions=[{"kind": "path_prefix", "target": "workspace/"}],
+    ), search())
+    registry.register(ToolManifest(
+        id="workspace.list_dir", name="列出目录", description="列出工作区内目录的单层条目",
+        input_schema={"type": "object",
+                      "properties": {"path": {"type": "string", "maxLength": 400}}},
+        output_schema={}, side_effect=False, risk_level="S0",
+        declared_permissions=[{"kind": "path_prefix", "target": "workspace/"}],
+    ), list_dir())
+    registry.register(ToolManifest(
+        id="document.parse", name="解析文档", description="解析文本/Markdown/PDF/DOCX（有界）",
+        input_schema={"type": "object",
+                      "properties": {"path": {"type": "string", "maxLength": 400}},
+                      "required": ["path"]},
+        output_schema={}, side_effect=False, risk_level="S0",
+        declared_permissions=[{"kind": "path_prefix", "target": "workspace/"}],
+    ), document_parse())
+    registry.register(ToolManifest(
+        id="code.inspect", name="代码检查", description="本地语法与符号检查（不执行）",
+        input_schema={"type": "object",
+                      "properties": {"path": {"type": "string", "maxLength": 400}},
+                      "required": ["path"]},
+        output_schema={}, side_effect=False, risk_level="S0",
+        declared_permissions=[{"kind": "path_prefix", "target": "workspace/"}],
+    ), code_inspect())

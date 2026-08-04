@@ -34,7 +34,7 @@ from . import (
     knowledge_management, knowledge_parser, knowledge_policy, knowledge_recall, knowledge_recall_service, knowledge_search,
     knowledge_worker, kig_evidence, kig_governance, kig_maintenance, kig_pipeline, kig_sources, llm, lore, memory, memory_conflicts, memory_shadow_proposals,
     persona, persona_output_guard, persona_v2, runtime_logs, short_memo, task_planner,
-    task_runs, worldbook_r1,
+    task_runs, tool_executor, worldbook_r1,
     saga_consolidator, saga_lifecycle, saga_summary,
     saga_summary_service, secret_store, slow_lifecycle, turn_ingress,
     chat_request_control, image_attachments, vision_capabilities,
@@ -3387,6 +3387,8 @@ class TaskPlanNodeIn(BaseModel):
     user_locked: bool = False
     locked_reason: Optional[Literal["edit", "explicit"]] = None
     recovery_class: Optional[Literal["side_effect_free", "idempotent", "side_effectful"]] = None
+    tool_ref: Optional[str] = Field(default=None, max_length=120)
+    tool_args: Optional[dict] = Field(default=None)
 
 
 class PlanProposalIn(BaseModel):
@@ -3632,6 +3634,19 @@ def replan_task_run(run_id: str, body: TaskRunRevisionIn) -> dict:
 
 @app.post("/api/task-runs/{run_id}/nodes/{node_id}/action")
 def act_on_task_node(run_id: str, node_id: str, body: TaskNodeActionIn) -> dict:
+    if body.action == "start":
+        run = task_runs.get(run_id)
+        if run is None:
+            raise HTTPException(404, "task_run_not_found")
+        node = next((item for item in run.get("nodes") or [] if item["id"] == node_id), None)
+        if node is None:
+            raise HTTPException(404, "task_node_not_found")
+        try:
+            return tool_executor.execute_node(run, node)
+        except tool_executor.ToolExecutionError as error:
+            raise HTTPException(409, {
+                "code": error.code, "message": str(error), "retry": "modify_then_retry",
+            }) from error
     return _task_run_call(lambda: task_runs.transition_node(
         run_id, node_id, body.action, output_summary=body.output_summary,
         error_code=body.error_code, error_message=body.error_message,

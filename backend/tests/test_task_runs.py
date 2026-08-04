@@ -686,6 +686,7 @@ def test_http_contract_exposes_plan_and_actions():
         "expected_revision": created.json()["revision"],
         "nodes": [{
             "client_id": "verify", "title": "运行固定集", "depends_on": [],
+            "tool_ref": "workspace.read_file", "tool_args": {"path": "README.md"},
         }],
     }, headers=headers)
     assert planned.status_code == 200
@@ -701,12 +702,11 @@ def test_http_contract_exposes_plan_and_actions():
         json={"action": "start", "expected_revision": started.json()["revision"]},
         headers=headers,
     )
-    assert node_started.status_code == 200
-    completed = client.post(f"/api/task-runs/{run_id}/nodes/{node_id}/action",
-                            json={"action": "succeed",
-                                  "expected_revision": node_started.json()["revision"]}, headers=headers)
-    assert completed.status_code == 200
-    assert completed.json()["status"] == "completed"
+    assert node_started.status_code == 200, node_started.text
+    assert node_started.json()["status"] == "completed"  # 单节点真实执行后完成
+    detail = client.get(f"/api/task-runs/{run_id}", headers=headers).json()
+    assert detail["nodes"][0]["status"] == "succeeded"
+    assert detail["tool_runs"][-1]["status"] == "succeeded"
 
 
 def test_http_revision_conflict_returns_current_snapshot():
