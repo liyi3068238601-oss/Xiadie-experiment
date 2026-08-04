@@ -230,8 +230,9 @@ def get(run_id: str) -> dict[str, Any] | None:
             "SELECT * FROM task_run_artifact_links WHERE task_run_id=? ORDER BY created_at,id", (run_id,),
         ).fetchall()]
         result["tool_runs"] = [dict(item) for item in conn.execute(
-            "SELECT id,trace_id,plugin_id,tool_name,status,phase,error_code,error_type,error_message,"
-            "created_at,updated_at FROM tool_runs WHERE task_run_id=? ORDER BY created_at,id", (run_id,),
+            "SELECT id,trace_id,task_run_id,plugin_id,tool_name,status,phase,error_code,error_type,"
+            "error_message,created_at,updated_at FROM tool_runs WHERE task_run_id=? "
+            "ORDER BY created_at,id", (run_id,),
         ).fetchall()]
         return result
     finally:
