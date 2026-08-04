@@ -2,7 +2,7 @@
 
 - 批次：CYR.2B（合同闭合 + UX 工作台）
 - 日期：2026-08-04
-- 合入：`agent/cyr2b-contract-closure` → `main`
+- 合入：`agent/cyr2b-contract-closure` → `main`（merge `e100182`）
 - 前置基线：CYR.2A（`e477bff`）、CYR.2B revision 并发合同（`abdb463` / PR #4）、合同闭合设计（`2fc0d1e` / PR #5）
 - Schema：87
 
