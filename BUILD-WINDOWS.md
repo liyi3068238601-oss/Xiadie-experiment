@@ -2,6 +2,8 @@
 
 把整个项目（Electron 壳 + React 前端 + Python FastAPI 后端）打成一个 **Windows 安装器（`遐蝶-Setup-<版本>.exe`）**，装完即用，**目标机器无需预装 Python 或 Node**。
 
+> **实验版状态提醒（2026-08-08）**：当前源码使用后端 `127.0.0.1:9756`、Vite `127.0.0.1:6173`、AppData 根 `Xiadie-Experiment` 和 Electron App ID `com.xiadie.agent.experiment`。CYR.3 / Schema 89 之后尚未重新完成安装、升级、卸载和资源完整性的全套 Windows 发布验收；本页说明可用于本地构建与排障，但不得视为安装包已经具备对外发布条件。恢复施工时应先阅读 [项目停工快照与恢复施工手册](docs/PROJECT_HIBERNATION_HANDOFF_2026-08.md)，并在发布前重新执行资源校验与安装器冒烟测试。
+
 ## 🚀 最简单：一键打包安装（自用推荐）
 
 把整个项目文件夹拷到你的 Windows 电脑，**双击根目录的 `一键打包安装.bat`** 就行。它会自动：
@@ -76,15 +78,15 @@ cd desktop  ; npm install ; npm run dist ; cd ..
    └─ models\bge-m3\           # 可选的本地 1024 维 dense 模型
 ```
 
-- 启动时 Electron 拉起 `resources\backend\xiadie-backend.exe`（本地 `127.0.0.1:8756`）。
-- 用户数据（SQLite 会话/记忆/任务）写到 **`%APPDATA%\遐蝶\data\`**（可写目录，不在安装目录里）。
+- 启动时 Electron 拉起 `resources\backend\xiadie-backend.exe`（本地 `127.0.0.1:9756`）。
+- 用户数据（SQLite 会话/记忆/任务）写到 **`%APPDATA%\Xiadie-Experiment\data\`**，诊断日志写到 **`%APPDATA%\Xiadie-Experiment\logs\`**（均为可写目录，不在安装目录里）。
 - 前端从 `resources\frontend\` 以 `file://` 加载。
 
 ## 常见问题
 
 - **杀毒 / SmartScreen 提示未签名**：未做代码签名的安装器首次运行会被 Windows SmartScreen 拦一下（"更多信息 → 仍要运行"）。正式对外发布建议购买代码签名证书，在 `electron-builder.yml` 里配置签名。
 - **后端起不来**：确认 `backend\dist\xiadie-backend\xiadie-backend.exe` 存在；排障时可把 `backend\xiadie-backend.spec` 里的 `console=False` 改成 `True` 重新冻结，能看到后端控制台日志。
-- **端口占用**：后端固定 `127.0.0.1:8756`；若被占用，改 `backend\run_frozen.py` 与 `desktop\main.js` 里的端口后重打。
+- **端口占用**：实验版后端固定 `127.0.0.1:9756`；若被占用，应统一修改后端冻结入口、Electron 启动配置和前端 API 基址，并重新执行隔离检查后再打包，不能只改其中一处，也不能回落正式版端口。
 - **electron-builder 提示不能创建 symbolic link**：打开 Windows“开发者模式”，或用具备“创建符号链接”权限的
   发布构建机再运行。该错误来自签名工具缓存解压，不代表前端、后端或 BGE-M3 资源损坏。
 

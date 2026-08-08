@@ -1,5 +1,7 @@
 # 遐蝶 · 助手优先 Windows 桌面 Agent（实验版）
 
+> **项目暂停说明（2026-08-08）**：本项目将长期暂停施工。恢复开发前请先阅读 [项目停工快照与恢复施工手册](docs/PROJECT_HIBERNATION_HANDOFF_2026-08.md)，其中记录了冻结提交、Schema 89、当前能力、已知风险、数据备份要求、恢复门禁和下一阶段 PLUG.0 / CYR.4 的接续顺序。旧路线段落如与该手册和阶段验收报告冲突，以手册记录的冻结事实为准。
+
 Xiadie Experiment 保留“遐蝶”的稳定身份、人格和自然表达，现阶段继续使用 Live2D 桌面入口，将主要职责收敛为现代通用 Agent：自然聊天、检索、分析、写作、编程、任务管理和受控工具执行。Live2D 是实验期过渡表现层，后期将在替代入口稳定后移除。
 
 本仓库不再发展角色离线生活模拟。原 LIFE 生活连续性系统已完成物理退役：运行时代码、UI、API、worker、adapter 和专属数据库表已经移除，同时保留用户记忆、知识、会话连续性、任务事实和角色人格。
@@ -328,7 +330,7 @@ npm.cmd run build
 4. `[x]` RETIRE.3：Schema 84 备份并删除 LIFE 专属表。
 5. `[x]` LOG.0：可观测性、诊断日志、隐私和 ToolRun v2 协议冻结。
 6. `[x]` LOG.1～LOG.5 实验基线：统一 Logger、TraceContext、实时诊断终端、Electron 日志和支持包；发布级故障注入与负载硬化继续保留为门禁。
-7. `[-]` CYR.1～CYR.3：CYR.1/CYR.1S、CYR.2A 与 CYR.2B（合同闭合 + UX 工作台）已完成并合入 `main`；下一批次为 CYR.2C 单 Agent Planner 与恢复策略；随后进入 ToolRegistry、权限和正式 Artifact。
+7. `[x]` CYR.1～CYR.3：CYR.1/CYR.1S、CYR.2A～CYR.2D 与 CYR.3 均已完成并合入 `main`，包括单 Agent Planner、锁定与来源语义、恢复面板、ToolRegistry、PermissionGuard、ConfirmationRequest、正式 Artifact 与恢复检查点；下一施工批次为 PLUG.0～PLUG.4，随后进入 CYR.4 Web/Research。
 8. `[ ]` PLUG.0～PLUG.4：MoFox 风格插件宿主、Manifest、生命周期、权限和隔离；Feeling 作为插件候选。
 9. `[ ]` Web/Research、文件与代码工具、MCP 接入。
 10. `[ ]` PresentationAdapter 解耦并在替代入口稳定后移除 Live2D。
@@ -337,4 +339,4 @@ npm.cmd run build
 ## 许可证
 
 项目代码遵循仓库 [LICENSE](LICENSE)。第三方模型、Live2D、字体、KFC 参考包和其他资产分别受其原许可证约束；源码级复用前必须确认兼容性和再分发权。
-> CYR.2B-UX (2026-08-04): TaskRun now includes editable multi-node plans, dependencies, completion criteria, plan-approval boundary copy, skip evidence, execution history, re-run, and a separate body-free cursor SSE stream. Agent planning remains CYR.2C; tool permissions remain CYR.3.
+> 历史节点（2026-08-04）：CYR.2B-UX 当时已交付多节点计划编辑、依赖与验收条件、批准边界、跳过证据、执行历史、再次执行和独立游标 SSE；其后规划中的 CYR.2C 与 CYR.3 现也已完成。当前冻结状态与恢复顺序以 [项目停工快照与恢复施工手册](docs/PROJECT_HIBERNATION_HANDOFF_2026-08.md) 为准。
